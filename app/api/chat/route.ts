@@ -1,11 +1,12 @@
 import { Sandbox } from "@e2b/desktop";
-import { ComputerModel, SSEEvent, SSEEventType } from "@/types/api";
+import { ComputerModel, OpenAICompatibleConfig, SSEEvent, SSEEventType } from "@/types/api";
 import {
   ComputerInteractionStreamerFacade,
   createStreamingResponse,
 } from "@/lib/streaming";
 import { SANDBOX_TIMEOUT_MS } from "@/lib/config";
 import { OpenAIComputerStreamer } from "@/lib/streaming/openai";
+import { OpenAICompatibleComputerStreamer } from "@/lib/streaming/openai-compatible";
 import { logError } from "@/lib/logger";
 import { ResolutionScaler } from "@/lib/streaming/resolution";
 
@@ -15,11 +16,23 @@ class StreamerFactory {
   static getStreamer(
     model: ComputerModel,
     desktop: Sandbox,
-    resolution: [number, number]
+    resolution: [number, number],
+    openaiCompatibleConfig?: OpenAICompatibleConfig
   ): ComputerInteractionStreamerFacade {
     const resolutionScaler = new ResolutionScaler(desktop, resolution);
 
     switch (model) {
+      case "openai-compatible":
+        if (!openaiCompatibleConfig) {
+          throw new Error(
+            "OpenAI-compatible config is required for openai-compatible model"
+          );
+        }
+        return new OpenAICompatibleComputerStreamer(
+          desktop,
+          resolutionScaler,
+          openaiCompatibleConfig
+        );
       case "anthropic":
       // currently not implemented
       /* return new AnthropicComputerStreamer(desktop, resolutionScaler); */
@@ -43,6 +56,7 @@ export async function POST(request: Request) {
     sandboxId,
     resolution,
     model = "openai",
+    openaiCompatibleConfig,
   } = await request.json();
 
   const apiKey = process.env.E2B_API_KEY;
@@ -82,7 +96,8 @@ export async function POST(request: Request) {
       const streamer = StreamerFactory.getStreamer(
         model as ComputerModel,
         desktop,
-        resolution
+        resolution,
+        openaiCompatibleConfig
       );
 
       if (!sandboxId && activeSandboxId && vncUrl) {

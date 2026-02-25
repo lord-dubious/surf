@@ -7,7 +7,16 @@ import { ResponseComputerToolCall } from "openai/resources/responses/responses.m
 /**
  * Model types supported by Surf
  */
-export type ComputerModel = "openai" | "anthropic";
+export type ComputerModel = "openai" | "anthropic" | "openai-compatible";
+
+/**
+ * Configuration for OpenAI-compatible providers (e.g., Kimi, MiniMax, GLM)
+ */
+export interface OpenAICompatibleConfig {
+  baseUrl: string;
+  apiKey: string;
+  modelId: string;
+}
 
 /**
  * SSE event types for client communication
@@ -36,7 +45,9 @@ export interface ActionEvent<T extends ComputerModel> extends BaseSSEEvent {
   type: SSEEventType.ACTION;
   action: T extends "openai"
     ? ResponseComputerToolCall["action"]
-    : ComputerAction;
+    : T extends "openai-compatible"
+      ? Record<string, unknown>
+      : ComputerAction;
 }
 
 /**
@@ -100,6 +111,16 @@ export type ActionResponse = {
     image_url: string;
   };
 };
+
+/**
+ * Model info returned from OpenAI-compatible /models endpoint
+ */
+export interface ModelInfo {
+  id: string;
+  object: string;
+  created?: number;
+  owned_by?: string;
+}
 
 /**
  * Helper function to sleep for a specified duration

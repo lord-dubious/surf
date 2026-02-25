@@ -17,7 +17,7 @@ import {
   AssistantChatMessage,
   SystemChatMessage,
 } from "@/types/chat";
-import { ComputerModel, SSEEventType } from "@/types/api";
+import { ComputerModel, OpenAICompatibleConfig, SSEEventType } from "@/types/api";
 import { logDebug, logError } from "./logger";
 
 interface ChatContextType extends ChatState {
@@ -32,6 +32,8 @@ interface ChatContextType extends ChatState {
   ) => void;
   model: ComputerModel;
   setModel: (model: ComputerModel) => void;
+  openaiCompatibleConfig: OpenAICompatibleConfig | null;
+  setOpenaiCompatibleConfig: (config: OpenAICompatibleConfig | null) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -50,6 +52,8 @@ export function ChatProvider({ children }: ChatProviderProps) {
     ((sandboxId: string, vncUrl: string) => void) | undefined
   >(undefined);
   const [model, setModel] = useState<ComputerModel>("openai");
+  const [openaiCompatibleConfig, setOpenaiCompatibleConfig] =
+    useState<OpenAICompatibleConfig | null>(null);
 
   const parseSSEEvent = (data: string): ParsedSSEEvent<typeof model> | null => {
     try {
@@ -126,6 +130,8 @@ export function ChatProvider({ children }: ChatProviderProps) {
           environment,
           resolution,
           model,
+          openaiCompatibleConfig:
+            model === "openai-compatible" ? openaiCompatibleConfig : undefined,
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -194,10 +200,10 @@ export function ChatProvider({ children }: ChatProviderProps) {
           switch (parsedEvent.type) {
             case SSEEventType.ACTION:
               if (parsedEvent.action) {
-                const actionMessage: ActionChatMessage<typeof model> = {
+                const actionMessage: ActionChatMessage = {
                   role: "action",
                   id: `action-${Date.now()}`,
-                  action: parsedEvent.action,
+                  action: parsedEvent.action as ActionChatMessage["action"],
                   status: "pending",
                   model,
                 };
@@ -331,6 +337,8 @@ export function ChatProvider({ children }: ChatProviderProps) {
     handleSubmit,
     model,
     setModel,
+    openaiCompatibleConfig,
+    setOpenaiCompatibleConfig,
     onSandboxCreated: (
       callback: (sandboxId: string, vncUrl: string) => void
     ) => {

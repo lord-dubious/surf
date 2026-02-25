@@ -2,7 +2,7 @@
  * Type definitions for chat messages and related functionality
  */
 import { ResponseComputerToolCall } from "openai/resources/responses/responses.mjs";
-import { ActionEvent, ComputerModel, SSEEventType } from "./api";
+import { ActionEvent, ComputerModel, OpenAICompatibleConfig, SSEEventType } from "./api";
 import { ComputerAction } from "@/types/anthropic";
 
 /**
@@ -96,6 +96,7 @@ export interface ChatApiRequest {
   environment?: string;
   resolution: [number, number];
   model?: ComputerModel;
+  openaiCompatibleConfig?: OpenAICompatibleConfig;
 }
 
 /**
@@ -107,4 +108,5 @@ export interface SendMessageOptions {
   environment?: string;
   resolution: [number, number];
   model?: ComputerModel;
+  openaiCompatibleConfig?: OpenAICompatibleConfig;
 }

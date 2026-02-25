@@ -16,6 +16,7 @@ import {
   Clock,
   User,
   Info,
+  Cpu,
 } from "lucide-react";
 import { useChat } from "@/lib/chat-context";
 import { Badge } from "../ui/badge";
@@ -130,8 +131,11 @@ export function ChatMessage({ message, className }: ChatMessageProps) {
   const getRoleIcon = () => {
     if (isUser) return <User className="h-3 w-3" />;
     if (isAssistant) {
-      if ((message as AssistantChatMessage).model === "openai") {
+      const assistantModel = (message as AssistantChatMessage).model;
+      if (assistantModel === "openai") {
         return <OpenAiLogo className="h-3 w-3" />;
+      } else if (assistantModel === "openai-compatible") {
+        return <Cpu className="h-3 w-3" />;
       } else {
         return <AnthropicLogo className="h-3 w-3" />;
       }

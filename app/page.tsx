@@ -26,6 +26,7 @@ import Logo from "@/components/logo";
 import { RepoBanner } from "@/components/repo-banner";
 import { SANDBOX_TIMEOUT_MS } from "@/lib/config";
 import { Surfing } from "@/components/surfing";
+import { SettingsPanel } from "@/components/settings-panel";
 
 export default function Home() {
   const [sandboxId, setSandboxId] = useState<string | null>(null);
@@ -240,6 +241,7 @@ export default function Home() {
           </div>
 
           <div className="hidden md:flex items-center gap-2">
+            <SettingsPanel />
             <ThemeToggle />
             <RepoBanner />
 
@@ -350,6 +352,7 @@ export default function Home() {
               transition={{ duration: 0.2 }}
             >
               <div className="flex items-center gap-2">
+                <SettingsPanel />
                 <ThemeToggle />
                 <RepoBanner />
               </div>
