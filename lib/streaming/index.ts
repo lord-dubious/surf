@@ -2,6 +2,7 @@ import { Sandbox } from "@e2b/desktop";
 import { SSEEvent, ActionResponse } from "@/types/api";
 import { ResolutionScaler } from "./resolution";
 import { logDebug } from "../logger";
+import type { ModelMessage } from "ai";
 
 export function formatSSE(event: SSEEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`;
@@ -9,7 +10,7 @@ export function formatSSE(event: SSEEvent): string {
 
 export interface ComputerInteractionStreamerFacadeStreamProps {
   signal: AbortSignal;
-  messages: { role: "user" | "assistant"; content: string }[];
+  messages: ModelMessage[];
 }
 
 export abstract class ComputerInteractionStreamerFacade {

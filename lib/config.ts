@@ -1,4 +1,13 @@
-export const SANDBOX_TIMEOUT_MS = 300_000; // 5 minutes in milliseconds
+export const DEFAULT_SANDBOX_TIMEOUT_MS = 300_000; // 5 minutes in milliseconds
+
+// Maximum allowed timeout (1 hour)
+export const MAX_SANDBOX_TIMEOUT_MS = 3_600_000;
+
+// Minimum allowed timeout (1 minute)
+export const MIN_SANDBOX_TIMEOUT_MS = 60_000;
+
+// Legacy constant for backwards compatibility
+export const SANDBOX_TIMEOUT_MS = DEFAULT_SANDBOX_TIMEOUT_MS;
 
 // Resolution boundaries for performance optimization
 // The sandbox will run at full resolution, but screenshots sent to the LLM API
