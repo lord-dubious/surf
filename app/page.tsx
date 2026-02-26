@@ -9,11 +9,18 @@ import {
   Menu,
   X,
   ArrowUpRight,
+  Settings,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { increaseTimeout, stopSandboxAction } from "@/app/actions";
-import { motion, AnimatePresence } from "framer-motion";
+import { 
+  SANDBOX_TIMEOUT_MS, 
+  DEFAULT_SANDBOX_TIMEOUT_MS,
+  MAX_SANDBOX_TIMEOUT_MS,
+  MIN_SANDBOX_TIMEOUT_MS 
+} from "@/lib/config";
+import { motion, AnimatePresence } from "motion/react";
 import { ChatList } from "@/components/chat/message-list";
 import { ChatInput } from "@/components/chat/input";
 import { ExamplePrompts } from "@/components/chat/example-prompts";
@@ -24,8 +31,8 @@ import { Loader, AssemblyLoader } from "@/components/loader";
 import Link from "next/link";
 import Logo from "@/components/logo";
 import { RepoBanner } from "@/components/repo-banner";
-import { SANDBOX_TIMEOUT_MS } from "@/lib/config";
 import { Surfing } from "@/components/surfing";
+import { SettingsModal } from "@/components/settings/settings-modal";
 
 export default function Home() {
   const [sandboxId, setSandboxId] = useState<string | null>(null);
@@ -39,6 +46,11 @@ export default function Home() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const iFrameWrapperRef = useRef<HTMLDivElement>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showTimeoutInput, setShowTimeoutInput] = useState(false);
+  const [customTimeoutMinutes, setCustomTimeoutMinutes] = useState<number>(
+    DEFAULT_SANDBOX_TIMEOUT_MS / 60000
+  );
 
   const {
     messages,
@@ -87,17 +99,27 @@ export default function Home() {
     }
   };
 
-  const handleIncreaseTimeout = async () => {
+  const handleIncreaseTimeout = async (durationMs?: number) => {
     if (!sandboxId) return;
 
     try {
-      await increaseTimeout(sandboxId);
-      setTimeRemaining(SANDBOX_TIMEOUT_MS / 1000);
-      toast.success("Instance time increased");
+      const result = await increaseTimeout(sandboxId, durationMs);
+      if (result.success && result.timeoutMs) {
+        setTimeRemaining(result.timeoutMs / 1000);
+        toast.success(`Timeout set to ${Math.round(result.timeoutMs / 60000)} minutes`);
+        setShowTimeoutInput(false);
+      } else {
+        toast.error(result.error || "Failed to set timeout");
+      }
     } catch (error) {
       console.error("Failed to increase time:", error);
-      toast.error("Failed to increase time");
+      toast.error("Failed to set timeout");
     }
+  };
+
+  const handleCustomTimeoutSubmit = () => {
+    const durationMs = Math.round(customTimeoutMinutes * 60000);
+    handleIncreaseTimeout(durationMs);
   };
 
   const onSubmit = (e: React.FormEvent) => {
@@ -168,7 +190,7 @@ export default function Home() {
     if (!sandboxId) return;
     const interval = setInterval(() => {
       if (isTabVisible) {
-        setTimeRemaining((prev) => (prev > 0 ? prev - 1 : 0));
+        setTimeRemaining((prev: number) => (prev > 0 ? prev - 1 : 0));
       }
     }, 1000);
     return () => clearInterval(interval);
@@ -240,6 +262,14 @@ export default function Home() {
           </div>
 
           <div className="hidden md:flex items-center gap-2">
+            <Button
+              onClick={() => setSettingsOpen(true)}
+              variant="outline"
+              size="icon"
+              title="Provider Settings"
+            >
+              <Settings className="h-5 w-5" />
+            </Button>
             <ThemeToggle />
             <RepoBanner />
 
@@ -252,30 +282,60 @@ export default function Home() {
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <Button
-                    onClick={handleIncreaseTimeout}
-                    variant="muted"
-                    title={
-                      isTabVisible
-                        ? "Increase Time"
-                        : "Timer paused (tab not active)"
-                    }
-                  >
-                    <Timer
-                      className={`h-3 w-3 ${
-                        !isTabVisible ? "text-fg-400" : ""
-                      }`}
-                    />
-                    <span
-                      className={`text-xs font-medium ${
-                        !isTabVisible ? "text-fg-400" : ""
-                      }`}
+                  {/* Timer display and input */}
+                  {showTimeoutInput ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={MIN_SANDBOX_TIMEOUT_MS / 60000}
+                        max={MAX_SANDBOX_TIMEOUT_MS / 60000}
+                        value={customTimeoutMinutes}
+                        onChange={(e) => setCustomTimeoutMinutes(Number(e.target.value))}
+                        className="w-16 h-7 px-2 text-xs bg-bg-100 border border-border rounded text-fg"
+                        placeholder="min"
+                      />
+                      <span className="text-xs text-fg-300">min</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCustomTimeoutSubmit}
+                      >
+                        Set
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowTimeoutInput(false)}
+                      >
+                        ✕
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      onClick={() => setShowTimeoutInput(true)}
+                      variant="muted"
+                      title={
+                        isTabVisible
+                          ? "Click to set custom timeout"
+                          : "Timer paused (tab not active)"
+                      }
                     >
-                      {Math.floor(timeRemaining / 60)}:
-                      {(timeRemaining % 60).toString().padStart(2, "0")}
-                      {!isTabVisible && " (paused)"}
-                    </span>
-                  </Button>
+                      <Timer
+                        className={`h-3 w-3 ${
+                          !isTabVisible ? "text-fg-400" : ""
+                        }`}
+                      />
+                      <span
+                        className={`text-xs font-medium ${
+                          !isTabVisible ? "text-fg-400" : ""
+                        }`}
+                      >
+                        {Math.floor(timeRemaining / 60)}:
+                        {(timeRemaining % 60).toString().padStart(2, "0")}
+                        {!isTabVisible && " (paused)"}
+                      </span>
+                    </Button>
+                  )}
 
                   <Button
                     onClick={stopSandbox}
@@ -300,31 +360,56 @@ export default function Home() {
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <Button
-                    onClick={handleIncreaseTimeout}
-                    variant="muted"
-                    size="sm"
-                    title={
-                      isTabVisible
-                        ? "Increase Time"
-                        : "Timer paused (tab not active)"
-                    }
-                    className="px-1.5"
-                  >
-                    <Timer
-                      className={`h-3 w-3 ${
-                        !isTabVisible ? "text-fg-400" : ""
-                      }`}
-                    />
-                    <span
-                      className={`text-xs font-medium ml-1 ${
-                        !isTabVisible ? "text-fg-400" : ""
-                      }`}
+                  {showTimeoutInput ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={MIN_SANDBOX_TIMEOUT_MS / 60000}
+                        max={MAX_SANDBOX_TIMEOUT_MS / 60000}
+                        value={customTimeoutMinutes}
+                        onChange={(e) => setCustomTimeoutMinutes(Number(e.target.value))}
+                        className="w-12 h-6 px-1 text-xs bg-bg-100 border border-border rounded text-fg"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCustomTimeoutSubmit}
+                        className="px-1.5"
+                      >
+                        Set
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowTimeoutInput(false)}
+                        className="px-1"
+                      >
+                        ✕
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      onClick={() => setShowTimeoutInput(true)}
+                      variant="muted"
+                      size="sm"
+                      title="Click to set timeout"
+                      className="px-1.5"
                     >
-                      {Math.floor(timeRemaining / 60)}:
-                      {(timeRemaining % 60).toString().padStart(2, "0")}
-                    </span>
-                  </Button>
+                      <Timer
+                        className={`h-3 w-3 ${
+                          !isTabVisible ? "text-fg-400" : ""
+                        }`}
+                      />
+                      <span
+                        className={`text-xs font-medium ml-1 ${
+                          !isTabVisible ? "text-fg-400" : ""
+                        }`}
+                      >
+                        {Math.floor(timeRemaining / 60)}:
+                        {(timeRemaining % 60).toString().padStart(2, "0")}
+                      </span>
+                    </Button>
+                  )}
 
                   <Button
                     onClick={stopSandbox}
@@ -434,6 +519,9 @@ export default function Home() {
           </div>
         </div>
       </Frame>
+
+      {/* Settings Modal */}
+      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

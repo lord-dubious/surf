@@ -96,6 +96,16 @@ export interface ChatApiRequest {
   environment?: string;
   resolution: [number, number];
   model?: ComputerModel;
+  /** Provider configuration for extended model support */
+  providerConfig?: {
+    id: string;
+    name: string;
+    type: string;
+    apiKey: string;
+    baseUrl?: string;
+    model: string;
+    useNativeComputerUse: boolean;
+  };
 }
 
 /**
@@ -107,4 +117,6 @@ export interface SendMessageOptions {
   environment?: string;
   resolution: [number, number];
   model?: ComputerModel;
+  /** Provider configuration for extended model support */
+  providerConfig?: ChatApiRequest["providerConfig"];
 }

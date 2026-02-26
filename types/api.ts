@@ -3,11 +3,17 @@
  */
 import { ComputerAction } from "@/types/anthropic";
 import { ResponseComputerToolCall } from "openai/resources/responses/responses.mjs";
+import type { ProviderType, ProviderConfig } from "@/lib/providers/types";
 
 /**
- * Model types supported by Surf
+ * Model types supported by Surf (legacy - use ProviderType for new code)
  */
 export type ComputerModel = "openai" | "anthropic";
+
+/**
+ * Extended model type including all provider types
+ */
+export type ExtendedComputerModel = ProviderType;
 
 /**
  * SSE event types for client communication

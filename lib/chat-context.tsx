@@ -6,6 +6,7 @@ import React, {
   useState,
   useRef,
   useCallback,
+  useEffect,
 } from "react";
 import {
   ChatMessage,
@@ -19,6 +20,8 @@ import {
 } from "@/types/chat";
 import { ComputerModel, SSEEventType } from "@/types/api";
 import { logDebug, logError } from "./logger";
+import { useProviders, getActiveProvider, getStoredE2BApiKey } from "@/lib/providers/store";
+import type { ProviderConfig } from "@/lib/providers/types";
 
 interface ChatContextType extends ChatState {
   sendMessage: (options: SendMessageOptions) => Promise<void>;
@@ -32,6 +35,8 @@ interface ChatContextType extends ChatState {
   ) => void;
   model: ComputerModel;
   setModel: (model: ComputerModel) => void;
+  /** Active provider configuration (for extended model support) */
+  activeProvider: ProviderConfig | null;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -50,6 +55,13 @@ export function ChatProvider({ children }: ChatProviderProps) {
     ((sandboxId: string, vncUrl: string) => void) | undefined
   >(undefined);
   const [model, setModel] = useState<ComputerModel>("openai");
+  const [activeProvider, setActiveProvider] = useState<ProviderConfig | null>(null);
+
+  // Load active provider from localStorage on mount
+  useEffect(() => {
+    const provider = getActiveProvider();
+    setActiveProvider(provider);
+  }, []);
 
   const parseSSEEvent = (data: string): ParsedSSEEvent<typeof model> | null => {
     try {
@@ -101,15 +113,23 @@ export function ChatProvider({ children }: ChatProviderProps) {
       id: Date.now().toString(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages((prev: ChatMessage[]) => [...prev, userMessage]);
 
     abortControllerRef.current = new AbortController();
 
     try {
+      console.log("[CHAT_CONTEXT] Sending message with config:", {
+        hasActiveProvider: !!activeProvider,
+        providerType: activeProvider?.type,
+        providerModel: activeProvider?.model,
+        hasApiKey: !!activeProvider?.apiKey,
+        model: model,
+      });
+      
       const apiMessages = messages
         .concat(userMessage)
-        .filter((msg) => msg.role === "user" || msg.role === "assistant")
-        .map((msg) => {
+        .filter((msg: ChatMessage) => msg.role === "user" || msg.role === "assistant")
+        .map((msg: ChatMessage) => {
           const typedMsg = msg as UserChatMessage | AssistantChatMessage;
           return {
             role: typedMsg.role,
@@ -126,18 +146,48 @@ export function ChatProvider({ children }: ChatProviderProps) {
           environment,
           resolution,
           model,
+          // Include E2B API key from UI (fallback to env on server)
+          e2bApiKey: getStoredE2BApiKey() || undefined,
+          // Include provider config if available (for extended model support)
+          ...(activeProvider && {
+            providerConfig: {
+              id: activeProvider.id,
+              name: activeProvider.name,
+              type: activeProvider.type,
+              apiKey: activeProvider.apiKey,
+              baseUrl: activeProvider.baseUrl,
+              model: activeProvider.model,
+              useNativeComputerUse: activeProvider.useNativeComputerUse,
+            },
+          }),
         }),
         signal: abortControllerRef.current.signal,
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        // Try to read error details from response
+        let errorDetails = `HTTP error! status: ${response.status}`;
+        try {
+          const errorBody = await response.text();
+          console.error("[CHAT_CONTEXT] Error response body:", errorBody);
+          if (errorBody) {
+            try {
+              const parsed = JSON.parse(errorBody);
+              errorDetails = parsed.error || parsed.message || errorBody;
+            } catch {
+              errorDetails = errorBody.substring(0, 200);
+            }
+          }
+        } catch (e) {
+          console.error("[CHAT_CONTEXT] Failed to read error body:", e);
+        }
+        throw new Error(errorDetails);
       }
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error("Response body is null");
 
-      setMessages((prev) => [
+      setMessages((prev: ChatMessage[]) => [
         ...prev,
         {
           role: "system",
@@ -187,7 +237,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
           const parsedEvent = parseSSEEvent(event);
           if (!parsedEvent) continue;
 
-          if (process.env.NODE_ENV === "development") {
+          if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
             logDebug("Parsed event:", parsedEvent);
           }
 
@@ -202,7 +252,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
                   model,
                 };
 
-                setMessages((prev) => [...prev, actionMessage]);
+                setMessages((prev: ChatMessage[]) => [...prev, actionMessage]);
               }
               break;
 
@@ -215,12 +265,12 @@ export function ChatProvider({ children }: ChatProviderProps) {
                   content: assistantMessage,
                   model,
                 };
-                setMessages((prev) => [...prev, reasoningMessage]);
+                setMessages((prev: ChatMessage[]) => [...prev, reasoningMessage]);
               }
               break;
 
             case SSEEventType.DONE:
-              setMessages((prev) => {
+              setMessages((prev: ChatMessage[]) => {
                 const systemMessage: SystemChatMessage = {
                   role: "system",
                   id: `system-${Date.now()}`,
@@ -234,7 +284,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
 
             case SSEEventType.ERROR:
               setError(parsedEvent.content);
-              setMessages((prev) => [
+              setMessages((prev: ChatMessage[]) => [
                 ...prev,
                 {
                   role: "system",
@@ -243,6 +293,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
                   isError: true,
                 },
               ]);
+            
               setIsLoading(false);
               break;
 
@@ -260,15 +311,15 @@ export function ChatProvider({ children }: ChatProviderProps) {
               break;
 
             case SSEEventType.ACTION_COMPLETED:
-              setMessages((prev) => {
+              setMessages((prev: ChatMessage[]) => {
                 const lastActionIndex = [...prev]
                   .reverse()
-                  .findIndex((msg) => msg.role === "action");
+                  .findIndex((msg: ChatMessage) => msg.role === "action");
 
                 if (lastActionIndex !== -1) {
                   const actualIndex = prev.length - 1 - lastActionIndex;
 
-                  return prev.map((msg, index) =>
+                  return prev.map((msg: ChatMessage, index: number) =>
                     index === actualIndex
                       ? { ...msg, status: "completed" }
                       : msg
@@ -282,7 +333,11 @@ export function ChatProvider({ children }: ChatProviderProps) {
         }
       }
     } catch (error) {
-      logError("Error sending message:", error);
+      const errorDetails = error instanceof Error 
+        ? { message: error.message, stack: error.stack, name: error.name }
+        : error;
+      console.error("[CHAT_CONTEXT] Error sending message:", JSON.stringify(errorDetails, null, 2));
+      logError("Error sending message:", errorDetails);
       setError(error instanceof Error ? error.message : "An error occurred");
       setIsLoading(false);
     }
@@ -331,6 +386,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
     handleSubmit,
     model,
     setModel,
+    activeProvider,
     onSandboxCreated: (
       callback: (sandboxId: string, vncUrl: string) => void
     ) => {
