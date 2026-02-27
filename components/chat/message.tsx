@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import Image from "next/image";
 import {
   ChatMessage as ChatMessageType,
   ActionChatMessage,
@@ -142,30 +141,6 @@ export function ChatMessage({ message, className }: ChatMessageProps) {
 
   const roleLabel = isUser ? "You" : isAssistant ? "Assistant" : "System";
 
-  const renderContent = (): React.ReactNode => {
-    if (!("content" in message)) return null;
-
-    if (typeof message.content === "string") {
-      return <>{message.content}</>;
-    }
-
-    return message.content.map((part, index) =>
-      part.type === "text" ? (
-        <React.Fragment key={`${message.id}-text-${index}`}>{part.text}</React.Fragment>
-      ) : (
-        <Image
-          key={`${message.id}-image-${index}`}
-          src={`data:image/png;base64,${part.image}`}
-          alt="Message content"
-          className="max-w-full rounded-md border border-border my-2"
-          width={1024}
-          height={768}
-          unoptimized
-        />
-      )
-    );
-  };
-
   return (
     <div
       className={cn(
@@ -187,7 +162,7 @@ export function ChatMessage({ message, className }: ChatMessageProps) {
             <span>{roleLabel}</span>
           </div>
           <div className="whitespace-pre-wrap break-words font-sans text-sm tracking-wide">
-            {renderContent()}
+            {message.content}
           </div>
         </CardContent>
       </Card>

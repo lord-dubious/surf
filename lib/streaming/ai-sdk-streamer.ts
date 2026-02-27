@@ -4,44 +4,20 @@
  * This streamer uses the Vercel AI SDK's streamText function with tools
  * to provide a unified interface for all providers.
  */
-import { streamText, type ModelMessage, stepCountIs } from "ai";
+import { streamText, generateText, StreamTextResult, type ModelMessage, stepCountIs } from "ai";
 import { Sandbox } from "@e2b/desktop";
 import { 
   ComputerInteractionStreamerFacade, 
   ComputerInteractionStreamerFacadeStreamProps,
+  formatSSE,
   createStreamingResponse
 } from "@/lib/streaming";
 import { ResolutionScaler } from "@/lib/streaming/resolution";
 import { createComputerTool, COMPUTER_USE_INSTRUCTIONS, ComputerToolContext } from "@/lib/tools/computer-tool";
 import { createProviderInstance, ProviderConfig, getProviderCapabilities } from "@/lib/providers";
-import type { ChatMessageContent, ChatMessagePart, ChatTransportMessage } from "@/types/chat";
 import { SSEEventType, SSEEvent } from "@/types/api";
 import type { ComputerAction } from "@/types/anthropic";
 import { logDebug, logError } from "@/lib/logger";
-
-
-function normalizeContentToParts(content: ChatMessageContent): ChatMessagePart[] {
-  if (typeof content === "string") {
-    return [{ type: "text", text: content }];
-  }
-
-  return content;
-}
-
-function normalizeMessages(messages: ModelMessage[]): ModelMessage[] {
-  return messages
-    .filter(
-      (msg): msg is Extract<ModelMessage, { role: "user" | "assistant" }> =>
-        msg.role === "user" || msg.role === "assistant"
-    )
-    .map((msg) => ({
-      role: msg.role,
-      content:
-        typeof msg.content === "string"
-          ? normalizeContentToParts(msg.content)
-          : (msg.content as ChatTransportMessage["content"]),
-    })) as unknown as ModelMessage[];
-}
 
 /**
  * AI SDK-based computer use streamer
@@ -115,24 +91,34 @@ export class AISDKComputerStreamer implements ComputerInteractionStreamerFacade 
       const initialScreenshotBase64 = Buffer.from(initialScreenshotData).toString("base64");
       console.log("[AI_SDK_STREAMER] Initial screenshot taken");
 
-      const normalizedMessages = normalizeMessages(messages);
-
-      const formattedMessages: ModelMessage[] = [
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: "Here is the current state of the desktop. Please help me with my task.",
-            },
-            {
-              type: "image",
-              image: initialScreenshotBase64,
-            },
-          ],
-        },
-        ...normalizedMessages,
-      ];
+      // Convert messages to AI SDK format with initial screenshot
+      const formattedMessages: ModelMessage[] = [];
+      
+      // Add initial screenshot as first user message
+      formattedMessages.push({
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: "Here is the current state of the desktop. Please help me with my task.",
+          },
+          {
+            type: "image",
+            image: initialScreenshotBase64,
+          },
+        ],
+      });
+      
+      // Add remaining messages (filter to only user/assistant messages with valid content)
+      for (const msg of messages) {
+        // Only add user and assistant messages, skip system/tool messages
+        if (msg.role === "user" || msg.role === "assistant") {
+          formattedMessages.push({
+            role: msg.role,
+            content: msg.content,
+          } as ModelMessage);
+        }
+      }
 
       // Check if this provider supports native computer use
       const capabilities = getProviderCapabilities(
@@ -288,11 +274,11 @@ export function createAISDKStreamingResponse(
   desktop: Sandbox,
   resolutionScaler: ResolutionScaler,
   providerConfig: ProviderConfig,
-  messages: ChatTransportMessage[],
+  messages: Array<{ role: "user" | "assistant"; content: string }>,
   signal: AbortSignal
 ): Response {
   const streamer = new AISDKComputerStreamer(desktop, resolutionScaler, providerConfig);
-  const generator = streamer.stream({ messages: messages as unknown as ModelMessage[], signal });
+  const generator = streamer.stream({ messages, signal });
   return createStreamingResponse(generator);
 }
 
