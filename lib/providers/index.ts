@@ -17,7 +17,7 @@ import type {
   ProviderCapabilities,
   ModelInfo 
 } from "./types";
-import { BUILTIN_PROVIDER_CAPABILITIES, supportsNativeComputerUse } from "./types";
+import { BUILTIN_PROVIDER_CAPABILITIES, supportsNativeComputerUse, providerRequiresApiKey } from "./types";
 
 // Re-export types
 export * from "./types";
@@ -27,25 +27,26 @@ export * from "./types";
  */
 export function createProviderInstance(config: ProviderConfig) {
   const { type, apiKey, baseUrl, model } = config;
+  const normalizedApiKey = apiKey || "";
 
   switch (type) {
     case "openai":
-      return createOpenAI({ apiKey })(model);
+      return createOpenAI({ apiKey: normalizedApiKey })(model);
     
     case "anthropic":
-      return createAnthropic({ apiKey })(model);
+      return createAnthropic({ apiKey: normalizedApiKey })(model);
     
     case "google":
-      return createGoogleGenerativeAI({ apiKey })(model);
+      return createGoogleGenerativeAI({ apiKey: normalizedApiKey })(model);
     
     case "groq":
-      return createGroq({ apiKey })(model);
+      return createGroq({ apiKey: normalizedApiKey })(model);
     
     case "mistral":
-      return createMistral({ apiKey })(model);
+      return createMistral({ apiKey: normalizedApiKey })(model);
     
     case "xai":
-      return createXai({ apiKey })(model);
+      return createXai({ apiKey: normalizedApiKey })(model);
     
     case "custom":
       if (!baseUrl) {
@@ -55,7 +56,7 @@ export function createProviderInstance(config: ProviderConfig) {
       return createOpenAICompatibleProvider({
         name: config.name,
         baseURL: baseUrl,
-        apiKey,
+        apiKey: normalizedApiKey,
       })(model);
     
     default:
@@ -70,7 +71,7 @@ export function createProviderInstance(config: ProviderConfig) {
 function createOpenAICompatibleProvider(options: {
   name: string;
   baseURL: string;
-  apiKey: string;
+  apiKey?: string;
 }) {
   // Use @ai-sdk/openai for custom endpoints
   return createOpenAI({
@@ -114,22 +115,28 @@ export function getProviderCapabilities(
  */
 export async function fetchAvailableModels(
   baseUrl: string,
-  apiKey: string,
+  apiKey?: string,
   providerType?: BuiltinProviderType
 ): Promise<ModelInfo[]> {
   try {
     // Normalize base URL - remove trailing slash
     const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
     
+    const hasApiKey = Boolean(apiKey);
+
     // Google uses query param for API key
     let endpointUrl: string;
     let headers: Record<string, string> = {};
     
     if (providerType === "google") {
-      endpointUrl = `${normalizedBaseUrl}/models?key=${apiKey}`;
+      endpointUrl = hasApiKey
+        ? `${normalizedBaseUrl}/models?key=${apiKey}`
+        : `${normalizedBaseUrl}/models`;
     } else {
       endpointUrl = `${normalizedBaseUrl}/models`;
-      headers["Authorization"] = `Bearer ${apiKey}`;
+      if (hasApiKey) {
+        headers["Authorization"] = `Bearer ${apiKey}`;
+      }
     }
     
     console.log(`[Model Fetch] Fetching models from: ${endpointUrl}`);
@@ -198,7 +205,7 @@ export async function fetchAvailableModels(
  */
 export async function fetchModelsForProvider(
   type: BuiltinProviderType,
-  apiKey: string
+  apiKey?: string
 ): Promise<ModelInfo[]> {
   const baseUrl = PROVIDER_BASE_URLS[type];
   if (!baseUrl) {
@@ -245,6 +252,13 @@ export const PROVIDER_DISPLAY_NAMES: Record<ProviderType, string> = {
 };
 
 /**
+ * Check whether a provider config can fetch models with current credentials
+ */
+function canFetchModels(type: ProviderType, apiKey?: string): boolean {
+  return !providerRequiresApiKey(type) || Boolean(apiKey);
+}
+
+/**
  * Test connection to a provider
  */
 export async function testProviderConnection(
@@ -263,6 +277,10 @@ export async function testProviderConnection(
 
     // For built-in providers, fetch models from their API
     if (config.type !== "custom") {
+      if (!canFetchModels(config.type, config.apiKey)) {
+        return { success: false, error: "API key is required for provider" };
+      }
+
       const models = await fetchModelsForProvider(config.type, config.apiKey);
       return { 
         success: true, 

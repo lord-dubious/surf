@@ -7,15 +7,13 @@ import { ModelInfo, BuiltinProviderType, PROVIDER_BASE_URLS } from "@/lib/provid
  * This bypasses CORS restrictions since server-side requests don't have CORS
  */
 export async function fetchModelsAction(
-  apiKey: string,
+  apiKey: string | undefined,
   type: "builtin" | "custom",
   providerType?: BuiltinProviderType,
   baseUrl?: string
 ): Promise<{ success: boolean; models: ModelInfo[]; error?: string }> {
   try {
-    if (!apiKey || apiKey.length < 10) {
-      return { success: false, models: [], error: "API key is required" };
-    }
+    const normalizedApiKey = apiKey?.trim();
 
     let endpointUrl: string;
     let headers: Record<string, string> = {};
@@ -23,8 +21,14 @@ export async function fetchModelsAction(
     if (type === "custom" && baseUrl) {
       // Custom provider - use provided base URL
       endpointUrl = baseUrl.replace(/\/+$/, "");
-      headers["Authorization"] = `Bearer ${apiKey}`;
+      if (normalizedApiKey) {
+        headers["Authorization"] = `Bearer ${normalizedApiKey}`;
+      }
     } else if (type === "builtin" && providerType) {
+      if (!normalizedApiKey) {
+        return { success: false, models: [], error: `API key is required for ${providerType}` };
+      }
+
       // Built-in provider - use known base URL
       const knownUrl = PROVIDER_BASE_URLS[providerType];
       if (!knownUrl) {
@@ -33,10 +37,10 @@ export async function fetchModelsAction(
       
       // Google uses query param for API key, not Authorization header
       if (providerType === "google") {
-        endpointUrl = `${knownUrl}/models?key=${apiKey}`;
+        endpointUrl = `${knownUrl}/models?key=${normalizedApiKey}`;
       } else {
         endpointUrl = `${knownUrl}/models`;
-        headers["Authorization"] = `Bearer ${apiKey}`;
+        headers["Authorization"] = `Bearer ${normalizedApiKey}`;
       }
     } else {
       return { success: false, models: [], error: "Invalid configuration" };

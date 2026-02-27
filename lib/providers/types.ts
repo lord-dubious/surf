@@ -34,7 +34,7 @@ export interface ProviderConfig {
   /** Provider type - determines which AI SDK package to use */
   type: ProviderType;
   /** API key for authentication */
-  apiKey: string;
+  apiKey?: string;
   /** Base URL for custom providers (OpenAI-compatible endpoints) */
   baseUrl?: string;
   /** Selected model ID */
@@ -47,6 +47,32 @@ export interface ProviderConfig {
   createdAt: number;
   /** Last used timestamp */
   lastUsedAt?: number;
+}
+
+/**
+ * Whether a provider requires an API key to authenticate
+ */
+export function providerRequiresApiKey(type: ProviderType): boolean {
+  return type !== "custom";
+}
+
+/**
+ * Validate provider configuration for required fields
+ */
+export function validateProviderConfig(config: ProviderConfig): string | null {
+  if (!config.model) {
+    return "Model is required for provider";
+  }
+
+  if (config.type === "custom" && !config.baseUrl) {
+    return "Base URL is required for custom providers";
+  }
+
+  if (providerRequiresApiKey(config.type) && !config.apiKey) {
+    return "API key is required for provider";
+  }
+
+  return null;
 }
 
 /**

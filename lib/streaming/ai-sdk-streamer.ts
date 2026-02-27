@@ -14,7 +14,7 @@ import {
 } from "@/lib/streaming";
 import { ResolutionScaler } from "@/lib/streaming/resolution";
 import { createComputerTool, COMPUTER_USE_INSTRUCTIONS, ComputerToolContext } from "@/lib/tools/computer-tool";
-import { createProviderInstance, ProviderConfig, getProviderCapabilities } from "@/lib/providers";
+import { createProviderInstance, ProviderConfig, getProviderCapabilities, validateProviderConfig } from "@/lib/providers";
 import { SSEEventType, SSEEvent } from "@/types/api";
 import type { ComputerAction } from "@/types/anthropic";
 import { logDebug, logError } from "@/lib/logger";
@@ -60,12 +60,10 @@ export class AISDKComputerStreamer implements ComputerInteractionStreamerFacade 
         baseUrl: this.providerConfig.baseUrl,
       });
       
-      // Validate required fields
-      if (!this.providerConfig.apiKey) {
-        throw new Error("API key is required for provider");
-      }
-      if (!this.providerConfig.model) {
-        throw new Error("Model is required for provider");
+      // Validate required fields per provider
+      const validationError = validateProviderConfig(this.providerConfig);
+      if (validationError) {
+        throw new Error(validationError);
       }
       
       // Create the model instance
