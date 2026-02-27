@@ -19,6 +19,85 @@ import { SSEEventType, SSEEvent } from "@/types/api";
 import type { ComputerAction } from "@/types/anthropic";
 import { logDebug, logError } from "@/lib/logger";
 
+type ToolLoopStreamChunk = Awaited<ReturnType<StreamTextResult<Record<string, never>, never>["fullStream"][typeof Symbol.asyncIterator]["next"]>>["value"];
+
+/**
+ * Adapter for ToolLoopAgent-style callbacks/chunks -> Surf SSE contract consumed by chat-context.
+ *
+ * Mapping contract:
+ * 1) Partial assistant text (`text-delta`) -> `SSEEventType.REASONING` with chunk text as-is.
+ * 2) Tool invocation (`tool-call`) -> `SSEEventType.ACTION` with tool input as the `action` payload.
+ * 3) Tool completion (`tool-result`) -> `SSEEventType.ACTION_COMPLETED` only after successful execute.
+ * 4) Terminal (`finish`) -> `SSEEventType.DONE`, stream errors (`error`) -> `SSEEventType.ERROR`.
+ */
+class ToolLoopSSEAdapter {
+  *mapChunkToSSE(chunk: ToolLoopStreamChunk): Generator<SSEEvent> {
+    switch (chunk.type) {
+      case "text-delta": {
+        yield {
+          type: SSEEventType.REASONING,
+          content: chunk.text,
+        };
+        return;
+      }
+
+      case "tool-call": {
+        const toolCall = chunk as {
+          toolCallId: string;
+          toolName: string;
+          input: Record<string, unknown>;
+        };
+
+        yield {
+          type: SSEEventType.ACTION,
+          action: toolCall.input as unknown as ComputerAction,
+        };
+        return;
+      }
+
+      case "tool-result": {
+        const toolResult = chunk as {
+          toolCallId: string;
+          toolName: string;
+          output?: unknown;
+          error?: unknown;
+          isError?: boolean;
+        };
+
+        logDebug("Tool result", toolResult.output);
+
+        if (!toolResult.isError && !toolResult.error) {
+          yield {
+            type: SSEEventType.ACTION_COMPLETED,
+          };
+        }
+        return;
+      }
+
+      case "error": {
+        const errorChunk = chunk as { error?: { message?: string } | string };
+        const content =
+          typeof errorChunk.error === "string"
+            ? errorChunk.error
+            : errorChunk.error?.message || "An error occurred";
+
+        yield {
+          type: SSEEventType.ERROR,
+          content,
+        };
+        return;
+      }
+
+      case "finish": {
+        yield {
+          type: SSEEventType.DONE,
+        };
+        return;
+      }
+    }
+  }
+}
+
 /**
  * AI SDK-based computer use streamer
  * 
@@ -154,6 +233,8 @@ export class AISDKComputerStreamer implements ComputerInteractionStreamerFacade 
     computerTool: ReturnType<typeof createComputerTool>,
     signal: AbortSignal
   ): AsyncGenerator<SSEEvent> {
+    const sseAdapter = new ToolLoopSSEAdapter();
+
     // Use streamText for real-time streaming
     const result = streamText({
       model,
@@ -178,54 +259,10 @@ export class AISDKComputerStreamer implements ComputerInteractionStreamerFacade 
         return;
       }
 
-      switch (chunk.type) {
-        case "text-delta": {
-          yield {
-            type: SSEEventType.REASONING,
-            content: chunk.text,
-          };
-          break;
-        }
+      for (const event of sseAdapter.mapChunkToSSE(chunk)) {
+        yield event;
 
-        case "tool-call": {
-          // AI SDK v6: tool-call has toolCallId, toolName, input
-          const toolCall = chunk as { toolCallId: string; toolName: string; input: Record<string, unknown> };
-          
-          // Yield the action event
-          yield {
-            type: SSEEventType.ACTION,
-            action: toolCall.input as unknown as ComputerAction,
-          };
-
-          // The tool execution happens automatically in the AI SDK
-          // We just need to signal completion
-          yield {
-            type: SSEEventType.ACTION_COMPLETED,
-          };
-          break;
-        }
-
-        case "tool-result": {
-          // Tool has been executed, result contains screenshot
-          // AI SDK v6: tool-result has toolCallId, toolName, input, output
-          const toolResult = chunk as { toolCallId: string; toolName: string; output: unknown };
-          logDebug("Tool result", toolResult.output);
-          break;
-        }
-
-        case "error": {
-          const errorChunk = chunk as { error?: { message?: string } };
-          yield {
-            type: SSEEventType.ERROR,
-            content: errorChunk.error?.message || "An error occurred",
-          };
-          break;
-        }
-
-        case "finish": {
-          yield {
-            type: SSEEventType.DONE,
-          };
+        if (event.type === SSEEventType.DONE) {
           return;
         }
       }
