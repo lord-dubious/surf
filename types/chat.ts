@@ -10,6 +10,23 @@ import { ComputerAction } from "@/types/anthropic";
  */
 export type MessageRole = "user" | "assistant" | "system" | "action";
 
+export interface ChatTextPart {
+  type: "text";
+  text: string;
+}
+
+export interface ChatImagePart {
+  type: "image";
+  image: string;
+}
+
+export type ChatMessagePart = ChatTextPart | ChatImagePart;
+export type ChatMessageContent = string | ChatMessagePart[];
+export type ChatTransportMessage = {
+  role: "user" | "assistant";
+  content: ChatMessageContent;
+};
+
 /**
  * Base interface for all chat messages
  */
@@ -23,7 +40,7 @@ export interface BaseChatMessage {
  */
 export interface UserChatMessage extends BaseChatMessage {
   role: "user";
-  content: string;
+  content: ChatMessageContent;
 }
 
 /**
@@ -31,7 +48,7 @@ export interface UserChatMessage extends BaseChatMessage {
  */
 export interface AssistantChatMessage extends BaseChatMessage {
   role: "assistant";
-  content: string;
+  content: ChatMessageContent;
   model: ComputerModel;
 }
 
@@ -91,7 +108,7 @@ export interface ParsedSSEEvent<T extends ComputerModel> {
  * Chat API request parameters
  */
 export interface ChatApiRequest {
-  messages: { role: MessageRole; content: string }[];
+  messages: ChatTransportMessage[];
   sandboxId?: string;
   environment?: string;
   resolution: [number, number];
