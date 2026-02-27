@@ -248,10 +248,41 @@ export class AnthropicComputerStreamer
   ): AsyncGenerator<SSEEvent<"anthropic">> {
     const { messages, signal } = props;
 
-    const anthropicMessages: BetaMessageParam[] = messages.map((msg) => ({
-      role: msg.role as "user" | "assistant",
-      content: [{ type: "text", text: msg.content }],
-    }));
+    const anthropicMessages = messages.map((msg) => {
+      const content =
+        typeof msg.content === "string"
+          ? [{ type: "text", text: msg.content }]
+          : msg.content.map((part) => {
+              if (part.type === "text" && "text" in part) {
+                return { type: "text", text: part.text };
+              }
+
+              if (part.type === "image" && "image" in part) {
+                return {
+                  type: "image",
+                  source: {
+                    type: "base64",
+                    media_type: "image/png",
+                    data:
+                      typeof part.image === "string"
+                        ? part.image
+                        : part.image instanceof Uint8Array
+                          ? Buffer.from(part.image).toString("base64")
+                          : part.image instanceof ArrayBuffer
+                            ? Buffer.from(new Uint8Array(part.image)).toString("base64")
+                            : "",
+                  },
+                };
+              }
+
+              return { type: "text", text: JSON.stringify(part) };
+            });
+
+      return {
+        role: msg.role as "user" | "assistant",
+        content,
+      };
+    }) as unknown as BetaMessageParam[];
 
     try {
       while (true) {

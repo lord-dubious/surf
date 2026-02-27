@@ -14,8 +14,8 @@ import {
   ParsedSSEEvent,
   SendMessageOptions,
   ActionChatMessage,
-  UserChatMessage,
   AssistantChatMessage,
+  ChatTransportMessage,
   SystemChatMessage,
 } from "@/types/chat";
 import { ComputerModel, SSEEventType } from "@/types/api";
@@ -126,16 +126,16 @@ export function ChatProvider({ children }: ChatProviderProps) {
         model: model,
       });
       
-      const apiMessages = messages
+      const apiMessages: ChatTransportMessage[] = messages
         .concat(userMessage)
-        .filter((msg: ChatMessage) => msg.role === "user" || msg.role === "assistant")
-        .map((msg: ChatMessage) => {
-          const typedMsg = msg as UserChatMessage | AssistantChatMessage;
-          return {
-            role: typedMsg.role,
-            content: typedMsg.content,
-          };
-        });
+        .filter(
+          (msg: ChatMessage): msg is Extract<ChatMessage, { role: "user" | "assistant" }> =>
+            msg.role === "user" || msg.role === "assistant"
+        )
+        .map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        }));
 
       const response = await fetch("/api/chat", {
         method: "POST",

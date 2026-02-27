@@ -11,11 +11,24 @@ import { AISDKComputerStreamer } from "@/lib/streaming/ai-sdk-streamer";
 import { logError } from "@/lib/logger";
 import { ResolutionScaler } from "@/lib/streaming/resolution";
 import type { ProviderConfig } from "@/lib/providers/types";
+import type { ChatTransportMessage } from "@/types/chat";
+import type { ModelMessage } from "ai";
 
 export const maxDuration = 800;
 
+
+function toModelMessages(messages: ChatTransportMessage[]): ModelMessage[] {
+  return messages.map((message) => ({
+    role: message.role,
+    content:
+      typeof message.content === "string"
+        ? [{ type: "text", text: message.content }]
+        : message.content,
+  })) as unknown as ModelMessage[];
+}
+
 interface ChatRequestBody {
-  messages: Array<{ role: "user" | "assistant"; content: string }>;
+  messages: ChatTransportMessage[];
   sandboxId?: string;
   resolution: [number, number];
   model?: ComputerModel;
@@ -95,6 +108,8 @@ export async function POST(request: Request) {
     });
   }
 
+  const modelMessages = toModelMessages(messages);
+
   let desktop: Sandbox | undefined;
   let activeSandboxId = sandboxId;
   let vncUrl: string | undefined;
@@ -144,12 +159,12 @@ export async function POST(request: Request) {
             vncUrl: vncUrl!,
           };
 
-          yield* streamer.stream({ messages, signal });
+          yield* streamer.stream({ messages: modelMessages, signal });
         }
 
         return createStreamingResponse(stream());
       } else {
-        return createStreamingResponse(streamer.stream({ messages, signal }));
+        return createStreamingResponse(streamer.stream({ messages: modelMessages, signal }));
       }
     } catch (error) {
       logError("Error from streaming service:", error);
