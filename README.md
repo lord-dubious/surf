@@ -75,7 +75,12 @@ OPENAI_API_KEY=your_openai_api_key
 npm run dev
 ```
 
-5. **Open the application**
+5. **Run tests**
+```bash
+pnpm test
+```
+
+6. **Open the application**
 
 Navigate to [http://localhost:3000](http://localhost:3000) in your browser.
 
