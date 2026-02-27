@@ -78,16 +78,17 @@ export async function executeComputerAction(
 ): Promise<{ success: boolean; screenshot?: string; error?: string }> {
   const { desktop, resolutionScaler } = context;
 
+  const scalePoint = (x: number, y: number): [number, number] => {
+    return resolutionScaler.scaleToOriginalSpace([x, y]);
+  };
+
   try {
     switch (params.action) {
       case "click": {
         if (params.x === undefined || params.y === undefined) {
           return { success: false, error: "Missing coordinates for click" };
         }
-        const [scaledX, scaledY] = resolutionScaler.scaleToOriginalSpace([
-          params.x,
-          params.y,
-        ]);
+        const [scaledX, scaledY] = scalePoint(params.x, params.y);
         const button = params.button || "left";
         
         if (button === "left") {
@@ -104,10 +105,7 @@ export async function executeComputerAction(
         if (params.x === undefined || params.y === undefined) {
           return { success: false, error: "Missing coordinates for double_click" };
         }
-        const [scaledX, scaledY] = resolutionScaler.scaleToOriginalSpace([
-          params.x,
-          params.y,
-        ]);
+        const [scaledX, scaledY] = scalePoint(params.x, params.y);
         await desktop.doubleClick(scaledX, scaledY);
         break;
       }
@@ -132,10 +130,7 @@ export async function executeComputerAction(
         if (params.x === undefined || params.y === undefined) {
           return { success: false, error: "Missing coordinates for scroll" };
         }
-        const [scaledX, scaledY] = resolutionScaler.scaleToOriginalSpace([
-          params.x,
-          params.y,
-        ]);
+        const [scaledX, scaledY] = scalePoint(params.x, params.y);
         await desktop.moveMouse(scaledX, scaledY);
         
         const direction = params.scroll_direction || "down";
@@ -148,10 +143,7 @@ export async function executeComputerAction(
         if (params.x === undefined || params.y === undefined) {
           return { success: false, error: "Missing coordinates for move" };
         }
-        const [scaledX, scaledY] = resolutionScaler.scaleToOriginalSpace([
-          params.x,
-          params.y,
-        ]);
+        const [scaledX, scaledY] = scalePoint(params.x, params.y);
         await desktop.moveMouse(scaledX, scaledY);
         break;
       }
@@ -160,14 +152,10 @@ export async function executeComputerAction(
         if (!params.path || params.path.length < 2) {
           return { success: false, error: "Drag requires at least 2 path points" };
         }
-        const start = resolutionScaler.scaleToOriginalSpace([
-          params.path[0].x,
-          params.path[0].y,
-        ]);
-        const end = resolutionScaler.scaleToOriginalSpace([
-          params.path[params.path.length - 1].x,
-          params.path[params.path.length - 1].y,
-        ]);
+        const startPoint = params.path[0];
+        const endPoint = params.path[params.path.length - 1];
+        const start = scalePoint(startPoint.x, startPoint.y);
+        const end = scalePoint(endPoint.x, endPoint.y);
         await desktop.drag(start, end);
         break;
       }
@@ -189,8 +177,9 @@ export async function executeComputerAction(
     }
 
     // Take screenshot after action
-    const screenshotData = await resolutionScaler.takeScreenshot();
-    const screenshotBase64 = Buffer.from(screenshotData).toString("base64");
+    const screenshotBase64 = Buffer.from(
+      await resolutionScaler.takeScreenshot()
+    ).toString("base64");
 
     return {
       success: true,
