@@ -15,40 +15,6 @@ import { ActionResponse } from "@/types/api";
 import { logDebug, logError, logWarning } from "../logger";
 import { ResolutionScaler } from "./resolution";
 
-
-function toOpenAIInput(messages: ComputerInteractionStreamerFacadeStreamProps["messages"]): ResponseInput {
-  return messages.map((msg) => {
-    const content =
-      typeof msg.content === "string"
-        ? msg.content
-        : msg.content.map((part) => {
-            if (part.type === "text" && "text" in part) {
-              return { type: "input_text", text: part.text };
-            }
-
-            if (part.type === "image" && "image" in part) {
-              const imageData =
-                typeof part.image === "string"
-                  ? part.image
-                  : part.image instanceof Uint8Array
-                    ? Buffer.from(part.image).toString("base64")
-                    : part.image instanceof ArrayBuffer
-                      ? Buffer.from(new Uint8Array(part.image)).toString("base64")
-                      : "";
-
-              return { type: "input_image", image_url: `data:image/png;base64,${imageData}` };
-            }
-
-            return { type: "input_text", text: JSON.stringify(part) };
-          });
-
-    return {
-      role: msg.role,
-      content,
-    };
-  }) as ResponseInput;
-}
-
 const INSTRUCTIONS = `
 You are Surf, a helpful assistant that can use a computer to help the user with their tasks.
 You can use the computer to search the web, write code, and more.
@@ -197,7 +163,7 @@ export class OpenAIComputerStreamer
       let response = await this.openai.responses.create({
         model: "computer-use-preview",
         tools: [computerTool],
-        input: toOpenAIInput(messages),
+        input: [...(messages as ResponseInput)],
         truncation: "auto",
         instructions: this.instructions,
         reasoning: {
