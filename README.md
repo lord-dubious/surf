@@ -44,7 +44,7 @@ The application consists of several key components:
 Before starting, you'll need:
 
 1. [Node.js](https://nodejs.org/) (version specified in package.json)
-2. [npm](https://www.npmjs.com/) (comes with Node.js)
+2. [pnpm](https://pnpm.io/) (recommended package manager)
 3. An [E2B API key](https://e2b.dev/docs/getting-started/api-key)
 4. An [OpenAI API key](https://platform.openai.com/api-keys)
 
@@ -58,7 +58,7 @@ cd surf
 
 2. **Install dependencies**
 ```bash
-npm install
+pnpm install
 ```
 
 3. **Set up environment variables**
@@ -72,10 +72,15 @@ OPENAI_API_KEY=your_openai_api_key
 
 4. **Start the development server**
 ```bash
-npm run dev
+pnpm dev
 ```
 
-5. **Open the application**
+5. **Run tests**
+```bash
+pnpm test
+```
+
+6. **Open the application**
 
 Navigate to [http://localhost:3000](http://localhost:3000) in your browser.
 
