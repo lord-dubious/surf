@@ -10,7 +10,8 @@ import {
   testProviderConnection,
   getProviderCapabilities,
   ModelInfo,
-  BuiltinProviderType
+  BuiltinProviderType,
+  providerRequiresApiKey
 } from "@/lib/providers";
 import { fetchModelsAction } from "@/app/actions/models";
 import { useProviders, getStoredE2BApiKey, setStoredE2BApiKey } from "@/lib/providers/store";
@@ -274,7 +275,9 @@ function ProviderForm({
 
   const isCustom = type === "custom";
   const capabilities = getProviderCapabilities(type, model);
-  const isBuiltin = type !== "custom";
+  const requiresApiKey = providerRequiresApiKey(type);
+  const hasApiKey = apiKey.trim().length > 0;
+  const canFetchModels = !requiresApiKey || apiKey.length >= 10;
   const [isLoadingModels, setIsLoadingModels] = React.useState(false);
   const [modelLoadError, setModelLoadError] = React.useState<string | null>(null);
 
@@ -287,7 +290,7 @@ function ProviderForm({
 
   // Fetch models for the current provider using server action
   const fetchModels = React.useCallback(async () => {
-    if (apiKey.length < 10) return;
+    if (!canFetchModels) return;
     
     setIsLoadingModels(true);
     setModelLoadError(null);
@@ -314,7 +317,7 @@ function ProviderForm({
     } finally {
       setIsLoadingModels(false);
     }
-  }, [type, apiKey, baseUrl, isCustom, onModelsLoaded]);
+  }, [type, apiKey, baseUrl, isCustom, onModelsLoaded, canFetchModels]);
 
   // Auto-fetch models when API key changes (on blur)
   const handleApiKeyBlur = React.useCallback(async () => {
@@ -330,10 +333,10 @@ function ProviderForm({
 
   // Fetch models when base URL changes for custom providers
   React.useEffect(() => {
-    if (isCustom && baseUrl && apiKey.length > 10) {
+    if (isCustom && baseUrl && canFetchModels) {
       fetchModels();
     }
-  }, [baseUrl, isCustom, apiKey.length, fetchModels]);
+  }, [baseUrl, isCustom, canFetchModels, fetchModels]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -448,15 +451,15 @@ function ProviderForm({
               onFocus={handleModelFocus}
               placeholder={
                 isCustom 
-                  ? baseUrl && apiKey.length > 10 
+                  ? baseUrl && canFetchModels 
                     ? "Click to load models..." 
                     : "Enter base URL and API key first"
-                  : apiKey.length > 10 
+                  : canFetchModels 
                     ? "Click to load models..." 
                     : "Enter API key first"
               }
             />
-            {isCustom && baseUrl && apiKey.length > 10 && (
+            {isCustom && baseUrl && canFetchModels && (
               <button
                 type="button"
                 onClick={handleModelFocus}
@@ -500,7 +503,7 @@ function ProviderForm({
 
       {/* Actions */}
       <div className="flex items-center gap-2 pt-2">
-        <Button type="submit" disabled={!apiKey || !model}>
+        <Button type="submit" disabled={(requiresApiKey && !hasApiKey) || !model}>
           {provider ? "Update" : "Add Provider"}
         </Button>
         <Button type="button" variant="outline" onClick={handleTest} loading={isTesting}>
