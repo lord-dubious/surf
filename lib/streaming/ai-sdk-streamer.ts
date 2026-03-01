@@ -32,8 +32,11 @@ class ToolLoopSSEAdapter {
     }
 
     if (chunk.type === "tool-result") {
-      const toolResult = chunk as { isError?: boolean; error?: unknown };
-      if (!toolResult.isError && !toolResult.error) {
+      const toolResult = chunk as { output?: { type?: string; payload?: unknown; error?: unknown } };
+      const output = toolResult.output;
+      if (output?.type === "action_error" || output?.type === "error-text") {
+        yield { type: SSEEventType.ERROR, content: String(output.error || output.payload || "Tool action failed") };
+      } else {
         yield { type: SSEEventType.ACTION_COMPLETED };
       }
       return;

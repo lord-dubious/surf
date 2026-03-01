@@ -63,6 +63,9 @@ function toAnthropicTextContent(content: unknown): string {
       if (part.type === "image") {
         const imageRef = part.url || part.image;
         if (imageRef) {
+          if (imageRef.startsWith("data:") || imageRef.includes("base64,") || imageRef.length > 500) {
+            return part.alt ? `[Image: ${part.alt}]` : "[Image: embedded image]";
+          }
           return `[Image: ${imageRef}]`;
         }
 
