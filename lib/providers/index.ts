@@ -67,6 +67,9 @@ export function createProviderInstance(config: ProviderConfig) {
       }
 
       if (baseUrl.includes("openrouter.ai")) {
+        if (!normalizedApiKey) {
+          throw new Error("OpenRouter API key is required");
+        }
         return createOpenRouterProvider(normalizedApiKey)(model);
       }
 
@@ -296,6 +299,9 @@ export async function testProviderConnection(
     }
 
     const models = await fetchModelsForProvider(config.type, config.apiKey);
+    if (!models || models.length === 0) {
+      return { success: false, error: 'No models discovered for provider' };
+    }
     return { success: true, models };
   } catch (error) {
     return {

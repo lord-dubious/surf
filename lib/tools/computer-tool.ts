@@ -130,6 +130,9 @@ export function createE2BComputerTool(context: ComputerToolContext, resolution: 
             await desktop.drag(fromScaled, toScaled);
             return { type: "action_done", action: "drag" };
           }
+          default: {
+            return { type: "action_error", action: (input as any).action, message: `unknown action ${(input as any).action}` };
+          }
         }
       } catch (error) {
         return {

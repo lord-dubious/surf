@@ -155,7 +155,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           )}
 
           {!showAddForm && !editingProvider && (
-            <Button variant="outline" onClick={() => setShowAddForm(true)} className="w-full">+ Add Provider</Button>
+            <Button variant="outline" onClick={() => { setAvailableModels([]); setShowAddForm(true); }} className="w-full">+ Add Provider</Button>
           )}
         </div>
       </div>
@@ -195,11 +195,31 @@ function ProviderForm({ provider, defaults, availableModels, onModelsLoaded, onS
 }) {
   const [name, setName] = React.useState(provider?.name || "");
   const [type, setType] = React.useState<ProviderType>(provider?.type || defaults?.type || "openai");
+
+
   const [apiKey, setApiKey] = React.useState(provider?.apiKey || "");
   const [baseUrl, setBaseUrl] = React.useState(provider?.baseUrl || (defaults?.type === "ollama" ? "http://localhost:11434/v1" : ""));
   const [model, setModel] = React.useState(provider?.model || defaults?.model || "");
   const [useNativeComputerUse, setUseNativeComputerUse] = React.useState(provider?.useNativeComputerUse ?? false);
   const [isLoadingModels, setIsLoadingModels] = React.useState(false);
+
+  React.useEffect(() => {
+    if (provider) {
+      setName(provider.name || "");
+      setType(provider.type || "openai");
+      setApiKey(provider.apiKey || "");
+      setBaseUrl(provider.baseUrl || "");
+      setModel(provider.model || "");
+      setUseNativeComputerUse(provider.useNativeComputerUse ?? false);
+    } else if (defaults) {
+      setName("");
+      setType(defaults.type || "openai");
+      setApiKey("");
+      setBaseUrl(defaults.type === "ollama" ? "http://localhost:11434/v1" : "");
+      setModel(defaults.model || "");
+      setUseNativeComputerUse(false);
+    }
+  }, [provider, defaults]);
   const [modelLoadError, setModelLoadError] = React.useState<string | null>(null);
 
   const requiresApiKey = providerRequiresApiKey(type);
@@ -209,6 +229,14 @@ function ProviderForm({ provider, defaults, availableModels, onModelsLoaded, onS
   const canFetchModels = !requiresApiKey || apiKey.trim().length > 0;
   const capabilities = getProviderCapabilities(type, model);
   const selectedModel = availableModels.find((m) => m.id === model);
+
+  React.useEffect(() => {
+    if (!showApiKey) {
+      setApiKey("");
+    }
+  }, [showApiKey]);
+
+
 
   const fetchModels = React.useCallback(async () => {
     if (!canFetchModels && type !== "ollama") return;
@@ -237,7 +265,7 @@ function ProviderForm({ provider, defaults, availableModels, onModelsLoaded, onS
     onSave({
       name: name || PROVIDER_DISPLAY_NAMES[type],
       type,
-      apiKey: apiKey || undefined,
+      apiKey: ((requiresApiKey || type === "custom") && showApiKey) ? apiKey : undefined,
       baseUrl: showBaseUrl ? baseUrl : undefined,
       model,
       useNativeComputerUse,
