@@ -212,9 +212,12 @@ function ProviderForm({ provider, defaults, availableModels, onModelsLoaded, onS
       setModel(provider.model || "");
       setUseNativeComputerUse(provider.useNativeComputerUse ?? false);
     } else if (defaults) {
+      setName("");
       setType(defaults.type || "openai");
-      setModel(defaults.model || "");
+      setApiKey("");
       setBaseUrl(defaults.type === "ollama" ? "http://localhost:11434/v1" : "");
+      setModel(defaults.model || "");
+      setUseNativeComputerUse(false);
     }
   }, [provider, defaults]);
   const [modelLoadError, setModelLoadError] = React.useState<string | null>(null);
@@ -262,7 +265,7 @@ function ProviderForm({ provider, defaults, availableModels, onModelsLoaded, onS
     onSave({
       name: name || PROVIDER_DISPLAY_NAMES[type],
       type,
-      apiKey: (requiresApiKey && showApiKey) ? apiKey : undefined,
+      apiKey: ((requiresApiKey || type === "custom") && showApiKey) ? apiKey : undefined,
       baseUrl: showBaseUrl ? baseUrl : undefined,
       model,
       useNativeComputerUse,
