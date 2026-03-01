@@ -228,7 +228,7 @@ export function createDefaultProviderFromEnv(type: ProviderType): ProviderConfig
     name: type.charAt(0).toUpperCase() + type.slice(1),
     type,
     apiKey: type === "ollama" ? undefined : apiKey,
-    model: type !== ("custom" as ProviderType) ? defaultModels[type as Exclude<ProviderType, "custom">] : "",
+    model: defaultModels[type as Exclude<ProviderType, "custom">],
     useNativeComputerUse: type === "openai" || type === "anthropic",
     isActive: true,
     createdAt: Date.now(),

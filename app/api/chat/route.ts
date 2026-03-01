@@ -148,8 +148,6 @@ export async function POST(request: Request) {
     });
   }
 
-
-
   const modelMessages: ModelMessage[] = messages.map((message) => {
     if (message.role === "assistant") {
       const content = typeof message.content === "string"
