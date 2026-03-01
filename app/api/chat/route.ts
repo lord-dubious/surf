@@ -16,6 +16,32 @@ import type { ProviderConfig } from "@/lib/providers/types";
 
 export const maxDuration = 800;
 
+function isValidChatContent(content: unknown): content is ChatMessageContent {
+  if (typeof content === "string") {
+    return true;
+  }
+
+  if (!Array.isArray(content)) {
+    return false;
+  }
+
+  return content.every((part) => {
+    if (!part || typeof part !== "object" || !("type" in part)) {
+      return false;
+    }
+
+    if (part.type === "text") {
+      return typeof (part as { text?: unknown }).text === "string";
+    }
+
+    if (part.type === "image") {
+      return typeof (part as { image?: unknown }).image === "string";
+    }
+
+    return false;
+  });
+}
+
 interface ChatRequestBody {
   messages: Array<{ role: "user" | "assistant"; content: ChatMessageContent }>;
   sandboxId?: string;
@@ -85,6 +111,29 @@ export async function POST(request: Request) {
     messagesCount: messages?.length,
     hasClientE2bKey: !!clientE2bKey
   });
+
+  if (!Array.isArray(messages)) {
+    logError("Invalid chat payload: messages must be an array", { messagesType: typeof messages });
+    return new Response(JSON.stringify({ error: "Invalid payload: messages must be an array" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const invalidMessage = messages.find(
+    (message) =>
+      !message ||
+      (message.role !== "user" && message.role !== "assistant") ||
+      !isValidChatContent(message.content),
+  );
+
+  if (invalidMessage) {
+    logError("Invalid chat payload: malformed message", invalidMessage);
+    return new Response(JSON.stringify({ error: "Invalid payload: each message must include a valid role and content" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   // Use client-provided E2B key or fallback to env
   const apiKey = clientE2bKey || process.env.E2B_API_KEY;

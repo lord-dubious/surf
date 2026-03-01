@@ -46,18 +46,38 @@ function toAnthropicTextContent(content: unknown): string {
     return content;
   }
 
-  if (Array.isArray(content)) {
-    const textParts = content
-      .filter((part): part is { type?: string; text?: string } =>
-        typeof part === "object" && part !== null && "type" in part,
-      )
-      .filter((part) => part.type === "text" && typeof part.text === "string")
-      .map((part) => part.text as string);
-
-    return textParts.join("\n");
+  if (!Array.isArray(content)) {
+    return "";
   }
 
-  return "";
+  const normalizedParts = content
+    .filter(
+      (part): part is { type?: string; text?: string; url?: string; alt?: string; image?: string } =>
+        typeof part === "object" && part !== null && "type" in part,
+    )
+    .map((part) => {
+      if (part.type === "text" && typeof part.text === "string") {
+        return part.text;
+      }
+
+      if (part.type === "image") {
+        const imageRef = part.url || part.image;
+        if (imageRef) {
+          return `[Image: ${imageRef}]`;
+        }
+
+        if (part.alt) {
+          return `[Image: ${part.alt}]`;
+        }
+
+        return "[Image]";
+      }
+
+      return "";
+    })
+    .filter((token) => token.length > 0);
+
+  return normalizedParts.join("\n");
 }
 
 export class AnthropicComputerStreamer

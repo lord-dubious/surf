@@ -18,7 +18,7 @@ export function createBashTool(sandbox: Sandbox) {
       return {
         stdout: result.stdout || "",
         stderr: result.stderr || "",
-        exitCode: result.exitCode ?? 0,
+        exitCode: result.exitCode,
       };
     },
   });

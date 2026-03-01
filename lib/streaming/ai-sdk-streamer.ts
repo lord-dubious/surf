@@ -126,6 +126,11 @@ export class AISDKComputerStreamer implements ComputerInteractionStreamerFacade 
         }
 
         for (const event of sseAdapter.mapChunkToSSE(chunk)) {
+          if (signal.aborted) {
+            yield { type: SSEEventType.DONE, content: "Generation stopped by user" };
+            return;
+          }
+
           yield event;
           if (event.type === SSEEventType.DONE) {
             return;
@@ -163,7 +168,16 @@ export class AISDKComputerStreamer implements ComputerInteractionStreamerFacade 
       const result = await agent.stream({ messages, abortSignal: signal });
       const sseAdapter = new ToolLoopSSEAdapter();
       for await (const chunk of result.fullStream) {
+        if (signal.aborted) {
+          yield { type: SSEEventType.DONE, content: "Generation stopped by user" };
+          return;
+        }
+
         for (const event of sseAdapter.mapChunkToSSE(chunk)) {
+          if (signal.aborted) {
+            yield { type: SSEEventType.DONE, content: "Generation stopped by user" };
+            return;
+          }
           yield event;
         }
       }

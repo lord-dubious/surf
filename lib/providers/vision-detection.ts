@@ -1,6 +1,6 @@
 const VISION_MODEL_PATTERNS: RegExp[] = [
   /gemini/i,
-  /vision/i,
+  /(^|[-_./:])vision($|[-_./:])/i,
   /kimi-k2\.5/i,
   /kimi-vl/i,
   /qwen.*vl/i,

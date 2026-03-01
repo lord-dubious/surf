@@ -225,8 +225,10 @@ function ProviderForm({ provider, defaults, availableModels, onModelsLoaded, onS
   }, [apiKey, baseUrl, canFetchModels, onModelsLoaded, showBaseUrl, type]);
 
   React.useEffect(() => {
-    if (availableModels.length > 0) onModelsLoaded([]);
-  }, [type]);
+    if (availableModels.length > 0) {
+      onModelsLoaded([]);
+    }
+  }, [availableModels, onModelsLoaded, type]);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();

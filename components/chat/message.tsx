@@ -144,9 +144,21 @@ export function ChatMessage({ message, className }: ChatMessageProps) {
   const displayMessage = message as UserChatMessage | AssistantChatMessage;
   const renderContent = (): string => {
     if (typeof displayMessage.content === "string") return displayMessage.content;
+
     return displayMessage.content
-      .filter((part): part is { type: "text"; text: string } => part.type === "text")
-      .map((part) => part.text)
+      .map((part) => {
+        if (part.type === "text") {
+          return part.text;
+        }
+
+        const imageUrl = ("url" in part ? part.url : undefined) || ("image" in part ? part.image : undefined);
+        const altText = "alt" in part ? part.alt : undefined;
+        if (imageUrl) {
+          return `![${altText || "image"}](${imageUrl})`;
+        }
+
+        return `[image: ${altText || "embedded image"}]`;
+      })
       .join("\n");
   };
 
