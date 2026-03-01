@@ -117,7 +117,7 @@ export const PROVIDER_BASE_URLS: Record<BuiltinProviderType, string> = {
 export const DEFAULT_MODELS: Record<BuiltinProviderType, string> = {
   openai: "computer-use-preview",
   anthropic: "claude-3-7-sonnet-latest",
-  google: "gemini-2.0-flash-exp",
+  google: "gemini-1.5-flash-latest",
   groq: "llama-3.3-70b-versatile",
   mistral: "mistral-large-latest",
   xai: "grok-2-1212",

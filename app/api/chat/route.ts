@@ -183,6 +183,7 @@ export async function POST(request: Request) {
   try {
     if (!activeSandboxId) {
       const newSandbox = await Sandbox.create({
+        apiKey,
         resolution,
         dpi: 96,
         timeoutMs: SANDBOX_TIMEOUT_MS,

@@ -19,7 +19,7 @@ export interface ModelPreset {
 
 export const MODEL_PRESETS: ModelPreset[] = [
   { label: "Gemini 2.0 Flash — Free", type: "openrouter", model: "google/gemini-2.0-flash-exp:free", hint: "Free, vision-capable. Get key at openrouter.ai" },
-  { label: "Gemini via AI Studio — Free", type: "google", model: "gemini-2.0-flash", hint: "60 RPM free. Get key at aistudio.google.com" },
+  { label: "Gemini via AI Studio — Free", type: "google", model: "gemini-1.5-flash-latest", hint: "60 RPM free. Get key at aistudio.google.com" },
   { label: "Kimi K2.5 — $0.50/M", type: "openrouter", model: "moonshotai/kimi-k2.5", hint: "Best for GUI automation tasks" },
   { label: "Llama 3.2 Vision — Free", type: "openrouter", model: "meta-llama/llama-3.2-11b-vision-instruct:free", hint: "Open weights, free tier on OpenRouter" },
   { label: "Local Ollama", type: "ollama", model: "", hint: "Uses your local Ollama instance at localhost:11434" },
@@ -197,7 +197,7 @@ export function createDefaultProviderFromEnv(type: ProviderType): ProviderConfig
   const envKeys: Record<ProviderType, string | undefined> = {
     openai: process.env.OPENAI_API_KEY,
     anthropic: process.env.ANTHROPIC_API_KEY,
-    google: process.env.GOOGLE_API_KEY,
+    google: process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_API_KEY,
     groq: process.env.GROQ_API_KEY,
     mistral: process.env.MISTRAL_API_KEY,
     xai: process.env.XAI_API_KEY,
@@ -214,7 +214,7 @@ export function createDefaultProviderFromEnv(type: ProviderType): ProviderConfig
   const defaultModels: Record<Exclude<ProviderType, "custom">, string> = {
     openai: "computer-use-preview",
     anthropic: "claude-3-7-sonnet-latest",
-    google: "gemini-2.0-flash-exp",
+    google: "gemini-1.5-flash-latest",
     groq: "llama-3.3-70b-versatile",
     mistral: "mistral-large-latest",
     xai: "grok-2-1212",
