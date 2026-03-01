@@ -209,7 +209,7 @@ export function createDefaultProviderFromEnv(type: ProviderType): ProviderConfig
   
   const apiKey = envKeys[type];
   if (type !== "ollama" && type !== "custom" && !apiKey) return null;
-  if (type === "custom") return null;
+  if (type === "custom") return null; // custom providers not yet implemented
   
   const defaultModels: Record<Exclude<ProviderType, "custom">, string> = {
     openai: "computer-use-preview",
