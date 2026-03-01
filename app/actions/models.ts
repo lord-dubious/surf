@@ -1,118 +1,162 @@
 "use server";
 
 import { ModelInfo, BuiltinProviderType, PROVIDER_BASE_URLS } from "@/lib/providers";
+import { hasVisionCapability } from "@/lib/providers/vision-detection";
 
-/**
- * Server action to fetch models from a provider's API
- * This bypasses CORS restrictions since server-side requests don't have CORS
- */
+type OpenRouterModel = {
+  id: string;
+  name?: string;
+  context_length?: number;
+  architecture?: { modality?: string };
+};
+
+type GenericModelResponse = {
+  data?: Array<{ id: string; name?: string; owned_by?: string; ownedBy?: string; context_length?: number }>;
+  models?: Array<{ id?: string; name?: string }>;
+};
+
+async function fetchOpenRouterModels(apiKey: string): Promise<ModelInfo[]> {
+  const response = await fetch("https://openrouter.ai/api/v1/models", {
+    headers: { Authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  if (!response.ok) {
+    return [];
+  }
+
+  const payload = (await response.json()) as { data?: OpenRouterModel[] };
+  const models = payload.data || [];
+
+  return models.map((model) => ({
+    id: model.id,
+    name: model.name || model.id,
+    contextLength: model.context_length,
+    hasVision: model.architecture?.modality?.includes("image") ?? hasVisionCapability(model.id),
+  }));
+}
+
+async function fetchOllamaModels(baseUrl: string): Promise<ModelInfo[]> {
+  const tagsBase = baseUrl.replace(/\/v1\/?$/, "");
+  const response = await fetch(`${tagsBase}/api/tags`, { signal: AbortSignal.timeout(10_000) });
+  if (!response.ok) {
+    return [];
+  }
+
+  const payload = (await response.json()) as { models?: Array<{ name?: string; model?: string }> };
+  return (payload.models || []).map((model) => {
+    const id = model.name || model.model || "unknown";
+    return {
+      id,
+      name: id,
+      hasVision: hasVisionCapability(id),
+    };
+  });
+}
+
+async function fetchOpenAICompatibleModels(baseUrl: string, apiKey?: string): Promise<ModelInfo[]> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`;
+  }
+
+  const response = await fetch(`${baseUrl.replace(/\/+$/, "")}/models`, {
+    headers,
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  if (!response.ok) {
+    return [];
+  }
+
+  const payload = (await response.json()) as GenericModelResponse;
+  const models = payload.data || [];
+  return models.map((model) => ({
+    id: model.id,
+    name: model.name || model.id,
+    ownedBy: model.owned_by || model.ownedBy,
+    contextLength: model.context_length,
+    hasVision: hasVisionCapability(model.id),
+  }));
+}
+
 export async function fetchModelsAction(
   apiKey: string | undefined,
   type: "builtin" | "custom",
   providerType?: BuiltinProviderType,
-  baseUrl?: string
+  baseUrl?: string,
 ): Promise<{ success: boolean; models: ModelInfo[]; error?: string }> {
   try {
     const normalizedApiKey = apiKey?.trim();
 
-    let endpointUrl: string;
-    let headers: Record<string, string> = {};
-    
-    if (type === "custom" && baseUrl) {
-      // Custom provider - use provided base URL
-      endpointUrl = baseUrl.replace(/\/+$/, "");
-      if (normalizedApiKey) {
-        headers["Authorization"] = `Bearer ${normalizedApiKey}`;
-      }
-    } else if (type === "builtin" && providerType) {
+    if (type === "builtin" && providerType === "openrouter") {
       if (!normalizedApiKey) {
-        return { success: false, models: [], error: `API key is required for ${providerType}` };
+        return { success: false, models: [], error: "API key is required for openrouter" };
       }
+      const models = await fetchOpenRouterModels(normalizedApiKey);
+      return { success: true, models };
+    }
 
-      // Built-in provider - use known base URL
+    if (type === "builtin" && providerType === "ollama") {
+      const models = await fetchOllamaModels(baseUrl || PROVIDER_BASE_URLS.ollama);
+      return { success: true, models };
+    }
+
+    if (type === "custom") {
+      if (!baseUrl) {
+        return { success: false, models: [], error: "Base URL is required" };
+      }
+      if (baseUrl.includes("openrouter.ai")) {
+        if (!normalizedApiKey) {
+          return { success: false, models: [], error: "API key is required for OpenRouter" };
+        }
+        const models = await fetchOpenRouterModels(normalizedApiKey);
+        return { success: true, models };
+      }
+      const models = await fetchOpenAICompatibleModels(baseUrl, normalizedApiKey);
+      return { success: true, models };
+    }
+
+    if (type === "builtin" && providerType) {
       const knownUrl = PROVIDER_BASE_URLS[providerType];
       if (!knownUrl) {
         return { success: false, models: [], error: `Unknown provider: ${providerType}` };
       }
-      
-      // Google uses query param for API key, not Authorization header
-      if (providerType === "google") {
-        endpointUrl = `${knownUrl}/models?key=${normalizedApiKey}`;
-      } else {
-        endpointUrl = `${knownUrl}/models`;
-        headers["Authorization"] = `Bearer ${normalizedApiKey}`;
+
+      if (!normalizedApiKey && providerType !== "ollama") {
+        return { success: false, models: [], error: `API key is required for ${providerType}` };
       }
-    } else {
-      return { success: false, models: [], error: "Invalid configuration" };
-    }
 
-    console.log(`[Server Model Fetch] Fetching from: ${endpointUrl}`);
+      if (providerType === "google") {
+        const endpointUrl = `${knownUrl}/models?key=${normalizedApiKey}`;
+        const response = await fetch(endpointUrl, {
+          headers: { "Content-Type": "application/json" },
+          signal: AbortSignal.timeout(10_000),
+        });
 
-    const response = await fetch(endpointUrl, {
-      headers: {
-        ...headers,
-        "Content-Type": "application/json",
-      },
-      // Add timeout
-      signal: AbortSignal.timeout(10000),
-    });
+        if (!response.ok) {
+          return { success: false, models: [], error: `API returned ${response.status}` };
+        }
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => "");
-      console.error(`[Server Model Fetch] Failed: ${response.status}`, errorText);
-      return { 
-        success: false, 
-        models: [], 
-        error: `API returned ${response.status}: ${response.statusText}` 
-      };
-    }
+        const data = (await response.json()) as { models?: Array<{ name: string; displayName?: string }> };
+        const models = (data.models || []).map((model) => ({
+          id: model.name,
+          name: model.displayName || model.name,
+          hasVision: hasVisionCapability(model.name),
+        }));
+        return { success: true, models };
+      }
 
-    const data = await response.json() as { 
-      data?: Array<{ id: string; name?: string; owned_by?: string; ownedBy?: string }>;
-      models?: Array<{ id?: string; name?: string }>;
-    };
-
-    console.log(`[Server Model Fetch] Response received`);
-
-    // OpenAI-compatible format: { data: [{ id: string, ... }] }
-    if (data.data && Array.isArray(data.data)) {
-      const models = data.data.map((model) => ({
-        id: model.id,
-        name: model.name || model.id,
-        ownedBy: model.owned_by || model.ownedBy,
-      }));
-      console.log(`[Server Model Fetch] Found ${models.length} models (OpenAI format)`);
+      const models = await fetchOpenAICompatibleModels(knownUrl, normalizedApiKey);
       return { success: true, models };
     }
 
-    // Ollama format: { models: [{ name: string, ... }] }
-    if (data.models && Array.isArray(data.models)) {
-      const models = data.models.map((model) => ({
-        id: model.name || model.id || "unknown",
-        name: model.name || model.id || "unknown",
-      }));
-      console.log(`[Server Model Fetch] Found ${models.length} models (Ollama format)`);
-      return { success: true, models };
-    }
-
-    // Some APIs return a flat array
-    if (Array.isArray(data)) {
-      const models = (data as Array<{ id?: string; name?: string }>).map((model) => ({
-        id: model.id || model.name || "unknown",
-        name: model.name || model.id || "unknown",
-      }));
-      console.log(`[Server Model Fetch] Found ${models.length} models (flat array)`);
-      return { success: true, models };
-    }
-
-    console.log(`[Server Model Fetch] No models found in response`);
-    return { success: false, models: [], error: "No models found in API response" };
+    return { success: false, models: [], error: "Invalid configuration" };
   } catch (error) {
-    console.error("[Server Model Fetch] Error:", error);
-    return { 
-      success: false, 
-      models: [], 
-      error: error instanceof Error ? error.message : "Failed to fetch models" 
+    return {
+      success: false,
+      models: [],
+      error: error instanceof Error ? error.message : "Failed to fetch models",
     };
   }
 }

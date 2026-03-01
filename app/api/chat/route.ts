@@ -1,5 +1,7 @@
 import { Sandbox } from "@e2b/desktop";
 import { ComputerModel, SSEEvent, SSEEventType } from "@/types/api";
+import type { ChatMessageContent } from "@/types/chat";
+import type { ModelMessage } from "ai";
 import {
   ComputerInteractionStreamerFacade,
   createStreamingResponse,
@@ -15,7 +17,7 @@ import type { ProviderConfig } from "@/lib/providers/types";
 export const maxDuration = 800;
 
 interface ChatRequestBody {
-  messages: Array<{ role: "user" | "assistant"; content: string }>;
+  messages: Array<{ role: "user" | "assistant"; content: ChatMessageContent }>;
   sandboxId?: string;
   resolution: [number, number];
   model?: ComputerModel;
@@ -95,6 +97,37 @@ export async function POST(request: Request) {
     });
   }
 
+
+
+  const modelMessages: ModelMessage[] = messages.map((message) => {
+    if (message.role === "assistant") {
+      const content = typeof message.content === "string"
+        ? message.content
+        : message.content
+            .filter((part): part is { type: "text"; text: string } => part.type === "text")
+            .map((part) => part.text)
+            .join("\n");
+
+      return {
+        role: "assistant",
+        content,
+      };
+    }
+
+    const content = typeof message.content === "string"
+      ? [{ type: "text" as const, text: message.content }]
+      : message.content.map((part) =>
+          part.type === "text"
+            ? { type: "text" as const, text: part.text }
+            : { type: "image" as const, image: part.image },
+        );
+
+    return {
+      role: "user",
+      content,
+    };
+  });
+
   let desktop: Sandbox | undefined;
   let activeSandboxId = sandboxId;
   let vncUrl: string | undefined;
@@ -144,12 +177,12 @@ export async function POST(request: Request) {
             vncUrl: vncUrl!,
           };
 
-          yield* streamer.stream({ messages, signal });
+          yield* streamer.stream({ messages: modelMessages, signal });
         }
 
         return createStreamingResponse(stream());
       } else {
-        return createStreamingResponse(streamer.stream({ messages, signal }));
+        return createStreamingResponse(streamer.stream({ messages: modelMessages, signal }));
       }
     } catch (error) {
       logError("Error from streaming service:", error);

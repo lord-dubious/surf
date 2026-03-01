@@ -1,52 +1,57 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { fetchAvailableModels, getProviderCapabilities, supportsNativeComputerUse } from '@/lib/providers';
+import { describe, expect, it } from "vitest";
+import { createProviderInstance } from "@/lib/providers";
+import { hasVisionCapability } from "@/lib/providers/vision-detection";
 
-describe('provider utilities', () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('parses OpenAI-compatible model payloads', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          data: [{ id: 'gpt-4.1', name: 'GPT 4.1', owned_by: 'openai' }],
-        }),
+describe("createProviderInstance", () => {
+  it("creates OpenRouter provider without throwing", () => {
+    expect(() =>
+      createProviderInstance({
+        id: "1",
+        name: "openrouter",
+        type: "openrouter",
+        apiKey: "test-key",
+        model: "google/gemini-2.0-flash-exp:free",
+        useNativeComputerUse: false,
+        createdAt: Date.now(),
       }),
-    );
-
-    const models = await fetchAvailableModels('https://api.example.com/v1/', 'secret');
-
-    expect(models).toEqual([{ id: 'gpt-4.1', name: 'GPT 4.1', ownedBy: 'openai' }]);
-    expect(fetch).toHaveBeenCalledWith('https://api.example.com/v1/models', expect.any(Object));
+    ).not.toThrow();
   });
 
-  it('uses google key query param endpoint', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ models: [{ name: 'gemini-2.5-flash' }] }),
+  it("creates Ollama provider with default baseURL", () => {
+    expect(() =>
+      createProviderInstance({
+        id: "2",
+        name: "ollama",
+        type: "ollama",
+        model: "llava",
+        useNativeComputerUse: false,
+        createdAt: Date.now(),
       }),
-    );
-
-    const models = await fetchAvailableModels('https://googleapis.com/v1beta', 'my-key', 'google');
-
-    expect(models[0]?.id).toBe('gemini-2.5-flash');
-    expect(fetch).toHaveBeenCalledWith(
-      'https://googleapis.com/v1beta/models?key=my-key',
-      expect.any(Object),
-    );
+    ).not.toThrow();
   });
 
-  it('returns safe defaults for custom capability checks', () => {
-    const capabilities = getProviderCapabilities('custom', 'some-model');
+  it("throws for custom provider without baseURL", () => {
+    expect(() =>
+      createProviderInstance({
+        id: "3",
+        name: "custom",
+        type: "custom",
+        model: "some-model",
+        useNativeComputerUse: false,
+        createdAt: Date.now(),
+      }),
+    ).toThrow("Base URL is required for custom providers");
+  });
+});
 
-    expect(capabilities.hasVision).toBe(true);
-    expect(capabilities.hasToolCalling).toBe(true);
-    expect(capabilities.hasStreaming).toBe(true);
-    expect(capabilities.hasNativeComputerUse).toBe(supportsNativeComputerUse('some-model'));
+describe("hasVisionCapability", () => {
+  it.each([
+    ["google/gemini-2.0-flash-exp:free", true],
+    ["moonshotai/kimi-k2.5", true],
+    ["meta-llama/llama-3.2-11b-vision-instruct:free", true],
+    ["qwen/qwen2-vl-72b-instruct", true],
+    ["mistralai/mistral-7b-instruct", false],
+  ])("%s -> %s", (modelId, expected) => {
+    expect(hasVisionCapability(modelId)).toBe(expected);
   });
 });

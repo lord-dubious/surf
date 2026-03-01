@@ -10,6 +10,22 @@ const STORAGE_KEY = "surf_provider_configs";
 const ACTIVE_PROVIDER_KEY = "surf_active_provider";
 const E2B_API_KEY_STORAGE = "surf_e2b_api_key";
 
+export interface ModelPreset {
+  label: string;
+  type: ProviderType;
+  model: string;
+  hint: string;
+}
+
+export const MODEL_PRESETS: ModelPreset[] = [
+  { label: "Gemini 2.0 Flash — Free", type: "openrouter", model: "google/gemini-2.0-flash-exp:free", hint: "Free, vision-capable. Get key at openrouter.ai" },
+  { label: "Gemini via AI Studio — Free", type: "google", model: "gemini-2.0-flash", hint: "60 RPM free. Get key at aistudio.google.com" },
+  { label: "Kimi K2.5 — $0.50/M", type: "openrouter", model: "moonshotai/kimi-k2.5", hint: "Best for GUI automation tasks" },
+  { label: "Llama 3.2 Vision — Free", type: "openrouter", model: "meta-llama/llama-3.2-11b-vision-instruct:free", hint: "Open weights, free tier on OpenRouter" },
+  { label: "Local Ollama", type: "ollama", model: "", hint: "Uses your local Ollama instance at localhost:11434" },
+];
+
+
 /**
  * Get stored E2B API key
  */
@@ -185,6 +201,9 @@ export function createDefaultProviderFromEnv(type: ProviderType): ProviderConfig
     groq: process.env.GROQ_API_KEY,
     mistral: process.env.MISTRAL_API_KEY,
     xai: process.env.XAI_API_KEY,
+    openrouter: process.env.OPENROUTER_API_KEY,
+    huggingface: process.env.HUGGINGFACE_API_KEY,
+    ollama: undefined,
     custom: undefined,
   };
   
@@ -198,6 +217,9 @@ export function createDefaultProviderFromEnv(type: ProviderType): ProviderConfig
     groq: "llama-3.3-70b-versatile",
     mistral: "mistral-large-latest",
     xai: "grok-2-1212",
+    openrouter: "google/gemini-2.0-flash-exp:free",
+    huggingface: "Qwen/Qwen2.5-VL-7B-Instruct",
+    ollama: "llava",
   };
   
   return {

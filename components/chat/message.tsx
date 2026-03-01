@@ -5,6 +5,7 @@ import {
   ChatMessage as ChatMessageType,
   ActionChatMessage,
   AssistantChatMessage,
+  UserChatMessage,
 } from "@/types/chat";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -139,6 +140,16 @@ export function ChatMessage({ message, className }: ChatMessageProps) {
     return <Info className="h-3 w-3" />;
   };
 
+
+  const displayMessage = message as UserChatMessage | AssistantChatMessage;
+  const renderContent = (): string => {
+    if (typeof displayMessage.content === "string") return displayMessage.content;
+    return displayMessage.content
+      .filter((part): part is { type: "text"; text: string } => part.type === "text")
+      .map((part) => part.text)
+      .join("\n");
+  };
+
   const roleLabel = isUser ? "You" : isAssistant ? "Assistant" : "System";
 
   return (
@@ -162,7 +173,7 @@ export function ChatMessage({ message, className }: ChatMessageProps) {
             <span>{roleLabel}</span>
           </div>
           <div className="whitespace-pre-wrap break-words font-sans text-sm tracking-wide">
-            {message.content}
+            {renderContent()}
           </div>
         </CardContent>
       </Card>

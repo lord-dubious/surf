@@ -41,6 +41,25 @@ IMPORTANT NOTES:
 Please help the user effectively by observing the current state of the computer and taking appropriate actions.
 `;
 
+function toAnthropicTextContent(content: unknown): string {
+  if (typeof content === "string") {
+    return content;
+  }
+
+  if (Array.isArray(content)) {
+    const textParts = content
+      .filter((part): part is { type?: string; text?: string } =>
+        typeof part === "object" && part !== null && "type" in part,
+      )
+      .filter((part) => part.type === "text" && typeof part.text === "string")
+      .map((part) => part.text as string);
+
+    return textParts.join("\n");
+  }
+
+  return "";
+}
+
 export class AnthropicComputerStreamer
   implements ComputerInteractionStreamerFacade
 {
@@ -248,10 +267,16 @@ export class AnthropicComputerStreamer
   ): AsyncGenerator<SSEEvent<"anthropic">> {
     const { messages, signal } = props;
 
-    const anthropicMessages: BetaMessageParam[] = messages.map((msg) => ({
-      role: msg.role as "user" | "assistant",
-      content: [{ type: "text", text: msg.content }],
-    }));
+    const anthropicMessages: BetaMessageParam[] = messages.flatMap((msg) => {
+      if (msg.role !== "user" && msg.role !== "assistant") {
+        return [];
+      }
+
+      return [{
+        role: msg.role,
+        content: [{ type: "text", text: toAnthropicTextContent(msg.content) }],
+      }];
+    });
 
     try {
       while (true) {
