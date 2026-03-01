@@ -4,6 +4,7 @@ import {
   ModelInfo,
   BuiltinProviderType,
   PROVIDER_BASE_URLS,
+  PROVIDER_DISPLAY_NAMES,
   fetchAvailableModels,
   fetchGoogleModels,
   fetchModelsForProvider,
@@ -27,7 +28,7 @@ export async function fetchModelsAction(
 
       if (baseUrl.includes("openrouter.ai")) {
         if (!normalizedApiKey) {
-          return { success: false, models: [], error: "API key is required for OpenRouter" };
+          return { success: false, models: [], error: `API key is required for ${PROVIDER_DISPLAY_NAMES.openrouter}` };
         }
 
         const models = await fetchOpenRouterModels(normalizedApiKey);
@@ -49,7 +50,7 @@ export async function fetchModelsAction(
 
     if (providerType === "google") {
       if (!normalizedApiKey) {
-        return { success: false, models: [], error: "API key is required for google" };
+        return { success: false, models: [], error: `API key is required for ${PROVIDER_DISPLAY_NAMES.google}` };
       }
 
       const models = await fetchGoogleModels(normalizedApiKey);
@@ -58,7 +59,7 @@ export async function fetchModelsAction(
 
     if (providerType === "openrouter") {
       if (!normalizedApiKey) {
-        return { success: false, models: [], error: "API key is required for openrouter" };
+        return { success: false, models: [], error: `API key is required for ${PROVIDER_DISPLAY_NAMES.openrouter}` };
       }
 
       const models = await fetchOpenRouterModels(normalizedApiKey);
@@ -66,7 +67,7 @@ export async function fetchModelsAction(
     }
 
     if (!normalizedApiKey) {
-      return { success: false, models: [], error: `API key is required for ${providerType}` };
+      return { success: false, models: [], error: `API key is required for ${PROVIDER_DISPLAY_NAMES[providerType] || providerType}` };
     }
 
     const models = await fetchModelsForProvider(providerType, normalizedApiKey);

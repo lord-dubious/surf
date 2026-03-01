@@ -288,7 +288,7 @@ export async function testProviderConnection(
 
     if (config.type === "ollama") {
       const models = await fetchOllamaModels(config.baseUrl || PROVIDER_BASE_URLS.ollama);
-      return { success: true, models };
+      return { success: models.length > 0, models, error: models.length === 0 ? "No models found" : undefined };
     }
 
     if (!canFetchModels(config.type, config.apiKey)) {

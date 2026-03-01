@@ -208,7 +208,8 @@ export function createDefaultProviderFromEnv(type: ProviderType): ProviderConfig
   };
   
   const apiKey = envKeys[type];
-  if (type !== "ollama" && !apiKey) return null;
+  if (type !== "ollama" && type !== "custom" && !apiKey) return null;
+  if (type === "custom") return null;
   
   const defaultModels: Record<Exclude<ProviderType, "custom">, string> = {
     openai: "computer-use-preview",
@@ -227,7 +228,7 @@ export function createDefaultProviderFromEnv(type: ProviderType): ProviderConfig
     name: type.charAt(0).toUpperCase() + type.slice(1),
     type,
     apiKey: type === "ollama" ? undefined : apiKey,
-    model: type !== "custom" ? defaultModels[type] : "",
+    model: type !== ("custom" as ProviderType) ? defaultModels[type as Exclude<ProviderType, "custom">] : "",
     useNativeComputerUse: type === "openai" || type === "anthropic",
     isActive: true,
     createdAt: Date.now(),

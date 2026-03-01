@@ -120,15 +120,17 @@ export async function POST(request: Request) {
     });
   }
 
-  const invalidMessage = messages.find(
+  const invalidMessageIndex = messages.findIndex(
     (message) =>
       !message ||
       (message.role !== "user" && message.role !== "assistant") ||
       !isValidChatContent(message.content),
   );
 
-  if (invalidMessage) {
-    logError("Invalid chat payload: malformed message", invalidMessage);
+  if (invalidMessageIndex !== -1) {
+    const invalidMessage = messages[invalidMessageIndex];
+    const contentKind = Array.isArray(invalidMessage?.content) ? "array" : typeof invalidMessage?.content;
+    logError("Invalid chat payload: malformed message", { index: invalidMessageIndex, role: invalidMessage?.role, contentKind });
     return new Response(JSON.stringify({ error: "Invalid payload: each message must include a valid role and content" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },

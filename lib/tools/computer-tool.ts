@@ -43,7 +43,7 @@ function isFiniteCoordinate(value: number | undefined): value is number {
 
 function isPointWithinBounds(point: [number, number], bounds: [number, number]): boolean {
   const [x, y] = point;
-  return x >= 0 && y >= 0 && x <= bounds[0] && y <= bounds[1];
+  return x >= 0 && y >= 0 && x < bounds[0] && y < bounds[1];
 }
 
 export function createE2BComputerTool(context: ComputerToolContext, resolution: [number, number]) {

@@ -224,11 +224,13 @@ function ProviderForm({ provider, defaults, availableModels, onModelsLoaded, onS
     setIsLoadingModels(false);
   }, [apiKey, baseUrl, canFetchModels, onModelsLoaded, showBaseUrl, type]);
 
+  const prevTypeRef = React.useRef(type);
   React.useEffect(() => {
-    if (availableModels.length > 0) {
+    if (prevTypeRef.current !== type) {
       onModelsLoaded([]);
+      prevTypeRef.current = type;
     }
-  }, [availableModels, onModelsLoaded, type]);
+  }, [type, onModelsLoaded]);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();

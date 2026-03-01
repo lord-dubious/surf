@@ -3,8 +3,8 @@ import { Sandbox } from "@e2b/desktop";
 import { z } from "zod";
 
 const bashToolInputSchema = z.object({
-  command: z.string(),
-  timeout: z.number().optional().default(30_000),
+  command: z.string().min(1).max(100000),
+  timeout: z.number().int().min(0).max(300_000).optional().default(30_000),
 });
 
 type BashToolInput = z.infer<typeof bashToolInputSchema>;
