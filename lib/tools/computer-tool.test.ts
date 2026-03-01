@@ -1,110 +1,46 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import { describe, expect, it, vi } from "vitest";
+import { createComputerTool } from "./computer-tool";
 
-import { executeComputerAction } from "./computer-tool";
-
-class MockDesktop {
-  public calls: Array<{ method: string; args: unknown[] }> = [];
-
-  async leftClick(x: number, y: number) {
-    this.calls.push({ method: "leftClick", args: [x, y] });
-  }
-
-  async rightClick(x: number, y: number) {
-    this.calls.push({ method: "rightClick", args: [x, y] });
-  }
-
-  async middleClick(x: number, y: number) {
-    this.calls.push({ method: "middleClick", args: [x, y] });
-  }
-
-  async doubleClick(x: number, y: number) {
-    this.calls.push({ method: "doubleClick", args: [x, y] });
-  }
-
-  async moveMouse(x: number, y: number) {
-    this.calls.push({ method: "moveMouse", args: [x, y] });
-  }
-
-  async drag(start: [number, number], end: [number, number]) {
-    this.calls.push({ method: "drag", args: [start, end] });
-  }
-
-  async scroll(direction: "up" | "down", amount: number) {
-    this.calls.push({ method: "scroll", args: [direction, amount] });
-  }
-
-  async write(text: string) {
-    this.calls.push({ method: "write", args: [text] });
-  }
-
-  async press(keys: string[]) {
-    this.calls.push({ method: "press", args: [keys] });
-  }
+function createMockContext() {
+  return {
+    desktop: {
+      leftClick: vi.fn().mockResolvedValue(undefined),
+      rightClick: vi.fn().mockResolvedValue(undefined),
+      doubleClick: vi.fn().mockResolvedValue(undefined),
+      write: vi.fn().mockResolvedValue(undefined),
+      press: vi.fn().mockResolvedValue(undefined),
+      scroll: vi.fn().mockResolvedValue(undefined),
+      moveMouse: vi.fn().mockResolvedValue(undefined),
+      drag: vi.fn().mockResolvedValue(undefined),
+    },
+    resolutionScaler: {
+      getScaledResolution: vi.fn(() => [1000, 800] as [number, number]),
+      scaleToOriginalSpace: vi.fn(([x, y]: [number, number]) => [x, y] as [number, number]),
+      takeScreenshot: vi.fn().mockResolvedValue(Buffer.from("png")),
+    },
+  };
 }
 
-class MockResolutionScaler {
-  public scaleCalls: Array<[number, number]> = [];
+describe("createComputerTool legacy wrapper", () => {
+  it("executes a happy-path click action", async () => {
+    const context = createMockContext();
+    const legacyTool = createComputerTool(context as never);
 
-  scaleToOriginalSpace([x, y]: [number, number]): [number, number] {
-    this.scaleCalls.push([x, y]);
-    return [x * 2, y * 3];
-  }
+    const result = await legacyTool.execute({ action: "left_click", x: 10, y: 20 }, {} as never);
 
-  async takeScreenshot(): Promise<Buffer> {
-    return Buffer.from("scaled-screenshot-bytes");
-  }
-}
-
-test("click action scales model coordinates before left click", async () => {
-  const desktop = new MockDesktop();
-  const resolutionScaler = new MockResolutionScaler();
-
-  const result = await executeComputerAction(
-    {
-      action: "click",
-      x: 10,
-      y: 15,
-      button: "left",
-    },
-    { desktop: desktop as any, resolutionScaler: resolutionScaler as any }
-  );
-
-  assert.equal(result.success, true);
-  assert.deepEqual(resolutionScaler.scaleCalls, [[10, 15]]);
-  assert.deepEqual(desktop.calls[0], {
-    method: "leftClick",
-    args: [20, 45],
+    expect(context.desktop.leftClick).toHaveBeenCalledWith(10, 20);
+    expect(result).toEqual(expect.objectContaining({ type: "action_done", action: "left_click" }));
   });
-  assert.match(result.screenshot ?? "", /^data:image\/png;base64,/);
-});
 
-test("drag action scales both path endpoints before drag", async () => {
-  const desktop = new MockDesktop();
-  const resolutionScaler = new MockResolutionScaler();
+  it("returns structured error for out-of-bounds coordinates", async () => {
+    const context = createMockContext();
+    const legacyTool = createComputerTool(context as never);
 
-  const result = await executeComputerAction(
-    {
-      action: "drag",
-      path: [
-        { x: 4, y: 7 },
-        { x: 20, y: 30 },
-      ],
-    },
-    { desktop: desktop as any, resolutionScaler: resolutionScaler as any }
-  );
+    const result = await legacyTool.execute({ action: "move_mouse", x: 5000, y: 20 }, {} as never);
 
-  assert.equal(result.success, true);
-  assert.deepEqual(resolutionScaler.scaleCalls, [
-    [4, 7],
-    [20, 30],
-  ]);
-  assert.deepEqual(desktop.calls[0], {
-    method: "drag",
-    args: [
-      [8, 21],
-      [40, 90],
-    ],
+    expect(context.desktop.moveMouse).not.toHaveBeenCalled();
+    expect(result).toEqual(
+      expect.objectContaining({ type: "action_error", action: "move_mouse", message: "coordinates out of bounds" }),
+    );
   });
-  assert.match(result.screenshot ?? "", /^data:image\/png;base64,/);
 });

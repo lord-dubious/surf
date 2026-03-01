@@ -1,54 +1,42 @@
-import { describe, expect, it, vi } from 'vitest';
-import { executeComputerAction } from '@/lib/tools/computer-tool';
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { createE2BComputerTool } from "@/lib/tools/computer-tool";
 
-const makeContext = () => {
-  const desktop = {
-    leftClick: vi.fn(),
-    rightClick: vi.fn(),
-    middleClick: vi.fn(),
-    doubleClick: vi.fn(),
-    write: vi.fn(),
-    press: vi.fn(),
-    moveMouse: vi.fn(),
-    scroll: vi.fn(),
-    drag: vi.fn(),
-  };
-
-  const resolutionScaler = {
-    scaleToOriginalSpace: vi.fn(([x, y]: [number, number]) => [x * 2, y * 2]),
-    takeScreenshot: vi.fn(async () => Buffer.from('screen-binary')),
-  };
-
-  return { desktop, resolutionScaler } as any;
+const mockSandbox = {
+  screenshot: vi.fn().mockResolvedValue(new Uint8Array([0x89, 0x50, 0x4e, 0x47])),
+  leftClick: vi.fn().mockResolvedValue(undefined),
+  rightClick: vi.fn().mockResolvedValue(undefined),
+  doubleClick: vi.fn().mockResolvedValue(undefined),
+  write: vi.fn().mockResolvedValue(undefined),
+  press: vi.fn().mockResolvedValue(undefined),
+  scroll: vi.fn().mockResolvedValue(undefined),
+  moveMouse: vi.fn().mockResolvedValue(undefined),
+  drag: vi.fn().mockResolvedValue(undefined),
 };
 
-describe('executeComputerAction', () => {
-  it('fails gracefully when click coordinates are missing', async () => {
-    const context = makeContext();
+const mockScaler = {
+  takeScreenshot: vi.fn().mockResolvedValue(new Uint8Array([0x89, 0x50, 0x4e, 0x47])),
+  scaleToOriginalSpace: vi.fn((coords: [number, number]) => [coords[0] * 2, coords[1] * 2] as [number, number]),
+  getScaledResolution: vi.fn(() => [1920, 1080] as [number, number]),
+};
 
-    const result = await executeComputerAction({ action: 'click' }, context);
+describe("createE2BComputerTool", () => {
+  const tool = createE2BComputerTool({ desktop: mockSandbox as never, resolutionScaler: mockScaler as never }, [1920, 1080]);
 
-    expect(result).toEqual({ success: false, error: 'Missing coordinates for click' });
-    expect(context.desktop.leftClick).not.toHaveBeenCalled();
+  beforeEach(() => vi.clearAllMocks());
+
+  it("takes screenshot and returns base64 image data", async () => {
+    const result = await tool.execute({ action: "screenshot" }, {} as never);
+    expect(mockScaler.takeScreenshot).toHaveBeenCalled();
+    expect(result.type).toBe("screenshot");
   });
 
-  it('executes click using scaled coordinates and returns screenshot', async () => {
-    const context = makeContext();
-
-    const result = await executeComputerAction({ action: 'click', x: 5, y: 10, button: 'left' }, context);
-
-    expect(context.resolutionScaler.scaleToOriginalSpace).toHaveBeenCalledWith([5, 10]);
-    expect(context.desktop.leftClick).toHaveBeenCalledWith(10, 20);
-    expect(result.success).toBe(true);
-    expect(result.screenshot).toMatch(/^data:image\/png;base64,/);
+  it("calls leftClick with scaled coordinates", async () => {
+    await tool.execute({ action: "left_click", x: 100, y: 200 }, {} as never);
+    expect(mockSandbox.leftClick).toHaveBeenCalledWith(200, 400);
   });
 
-  it('requires at least two points for drag actions', async () => {
-    const context = makeContext();
-
-    const result = await executeComputerAction({ action: 'drag', path: [{ x: 1, y: 2 }] }, context);
-
-    expect(result.success).toBe(false);
-    expect(result.error).toBe('Drag requires at least 2 path points');
+  it("calls write with chunk-based typing settings", async () => {
+    await tool.execute({ action: "type", text: "hello world" }, {} as never);
+    expect(mockSandbox.write).toHaveBeenCalledWith("hello world", expect.objectContaining({ chunkSize: 50 }));
   });
 });

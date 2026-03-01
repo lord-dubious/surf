@@ -1,5 +1,7 @@
 import { Sandbox } from "@e2b/desktop";
 import { ComputerModel, SSEEvent, SSEEventType } from "@/types/api";
+import type { ChatMessageContent } from "@/types/chat";
+import type { ModelMessage } from "ai";
 import {
   ComputerInteractionStreamerFacade,
   createStreamingResponse,
@@ -14,8 +16,34 @@ import type { ProviderConfig } from "@/lib/providers/types";
 
 export const maxDuration = 800;
 
+function isValidChatContent(content: unknown): content is ChatMessageContent {
+  if (typeof content === "string") {
+    return true;
+  }
+
+  if (!Array.isArray(content)) {
+    return false;
+  }
+
+  return content.every((part) => {
+    if (!part || typeof part !== "object" || !("type" in part)) {
+      return false;
+    }
+
+    if (part.type === "text") {
+      return typeof (part as { text?: unknown }).text === "string";
+    }
+
+    if (part.type === "image") {
+      return typeof (part as { image?: unknown }).image === "string";
+    }
+
+    return false;
+  });
+}
+
 interface ChatRequestBody {
-  messages: Array<{ role: "user" | "assistant"; content: string }>;
+  messages: Array<{ role: "user" | "assistant"; content: ChatMessageContent }>;
   sandboxId?: string;
   resolution: [number, number];
   model?: ComputerModel;
@@ -84,6 +112,31 @@ export async function POST(request: Request) {
     hasClientE2bKey: !!clientE2bKey
   });
 
+  if (!Array.isArray(messages)) {
+    logError("Invalid chat payload: messages must be an array", { messagesType: typeof messages });
+    return new Response(JSON.stringify({ error: "Invalid payload: messages must be an array" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const invalidMessageIndex = messages.findIndex(
+    (message) =>
+      !message ||
+      (message.role !== "user" && message.role !== "assistant") ||
+      !isValidChatContent(message.content),
+  );
+
+  if (invalidMessageIndex !== -1) {
+    const invalidMessage = messages[invalidMessageIndex];
+    const contentKind = Array.isArray(invalidMessage?.content) ? "array" : typeof invalidMessage?.content;
+    logError("Invalid chat payload: malformed message", { index: invalidMessageIndex, role: invalidMessage?.role, contentKind });
+    return new Response(JSON.stringify({ error: "Invalid payload: each message must include a valid role and content" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   // Use client-provided E2B key or fallback to env
   const apiKey = clientE2bKey || process.env.E2B_API_KEY;
 
@@ -94,6 +147,34 @@ export async function POST(request: Request) {
       headers: { "Content-Type": "application/json" }
     });
   }
+  const modelMessages: ModelMessage[] = messages.map((message) => {
+    if (message.role === "assistant") {
+      const content = typeof message.content === "string"
+        ? message.content
+        : message.content
+            .filter((part): part is { type: "text"; text: string } => part.type === "text")
+            .map((part) => part.text)
+            .join("\n");
+
+      return {
+        role: "assistant",
+        content,
+      };
+    }
+
+    const content = typeof message.content === "string"
+      ? [{ type: "text" as const, text: message.content }]
+      : message.content.map((part) =>
+          part.type === "text"
+            ? { type: "text" as const, text: part.text }
+            : { type: "image" as const, image: part.image },
+        );
+
+    return {
+      role: "user",
+      content,
+    };
+  });
 
   let desktop: Sandbox | undefined;
   let activeSandboxId = sandboxId;
@@ -144,12 +225,12 @@ export async function POST(request: Request) {
             vncUrl: vncUrl!,
           };
 
-          yield* streamer.stream({ messages, signal });
+          yield* streamer.stream({ messages: modelMessages, signal });
         }
 
         return createStreamingResponse(stream());
       } else {
-        return createStreamingResponse(streamer.stream({ messages, signal }));
+        return createStreamingResponse(streamer.stream({ messages: modelMessages, signal }));
       }
     } catch (error) {
       logError("Error from streaming service:", error);

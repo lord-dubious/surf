@@ -41,6 +41,48 @@ IMPORTANT NOTES:
 Please help the user effectively by observing the current state of the computer and taking appropriate actions.
 `;
 
+function toAnthropicTextContent(content: unknown): string {
+  if (typeof content === "string") {
+    return content;
+  }
+
+  if (!Array.isArray(content)) {
+    return "";
+  }
+
+  const normalizedParts = content
+    .filter(
+      (part): part is { type?: string; text?: string; url?: string; alt?: string; image?: string } =>
+        typeof part === "object" && part !== null && "type" in part,
+    )
+    .map((part) => {
+      if (part.type === "text" && typeof part.text === "string") {
+        return part.text;
+      }
+
+      if (part.type === "image") {
+        const imageRef = part.url || part.image;
+        if (imageRef) {
+          if (imageRef.startsWith("data:") || imageRef.includes("base64,") || imageRef.length > 500) {
+            return part.alt ? `[Image: ${part.alt}]` : "[Image: embedded image]";
+          }
+          return `[Image: ${imageRef}]`;
+        }
+
+        if (part.alt) {
+          return `[Image: ${part.alt}]`;
+        }
+
+        return "[Image]";
+      }
+
+      return "";
+    })
+    .filter((token) => token.length > 0);
+
+  return normalizedParts.join("\n");
+}
+
 export class AnthropicComputerStreamer
   implements ComputerInteractionStreamerFacade
 {
@@ -248,10 +290,16 @@ export class AnthropicComputerStreamer
   ): AsyncGenerator<SSEEvent<"anthropic">> {
     const { messages, signal } = props;
 
-    const anthropicMessages: BetaMessageParam[] = messages.map((msg) => ({
-      role: msg.role as "user" | "assistant",
-      content: [{ type: "text", text: msg.content }],
-    }));
+    const anthropicMessages: BetaMessageParam[] = messages.flatMap((msg) => {
+      if (msg.role !== "user" && msg.role !== "assistant") {
+        return [];
+      }
+
+      return [{
+        role: msg.role,
+        content: [{ type: "text", text: toAnthropicTextContent(msg.content) }],
+      }];
+    });
 
     try {
       while (true) {

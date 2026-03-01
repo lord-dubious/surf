@@ -20,7 +20,7 @@ import {
 } from "@/types/chat";
 import { ComputerModel, SSEEventType } from "@/types/api";
 import { logDebug, logError } from "./logger";
-import { useProviders, getActiveProvider, getStoredE2BApiKey } from "@/lib/providers/store";
+import { getActiveProvider, getStoredE2BApiKey } from "@/lib/providers/store";
 import type { ProviderConfig } from "@/lib/providers/types";
 
 interface ChatContextType extends ChatState {
@@ -128,14 +128,13 @@ export function ChatProvider({ children }: ChatProviderProps) {
       
       const apiMessages = messages
         .concat(userMessage)
-        .filter((msg: ChatMessage) => msg.role === "user" || msg.role === "assistant")
-        .map((msg: ChatMessage) => {
-          const typedMsg = msg as UserChatMessage | AssistantChatMessage;
-          return {
-            role: typedMsg.role,
-            content: typedMsg.content,
-          };
-        });
+        .filter((msg: ChatMessage): msg is UserChatMessage | AssistantChatMessage =>
+          msg.role === "user" || msg.role === "assistant"
+        )
+        .map((typedMsg) => ({
+          role: typedMsg.role,
+          content: typedMsg.content,
+        }));
 
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -283,13 +282,13 @@ export function ChatProvider({ children }: ChatProviderProps) {
               break;
 
             case SSEEventType.ERROR:
-              setError(parsedEvent.content);
+              setError(parsedEvent.content ?? "An unknown error occurred");
               setMessages((prev: ChatMessage[]) => [
                 ...prev,
                 {
                   role: "system",
                   id: `system-${Date.now()}`,
-                  content: parsedEvent.content,
+                  content: parsedEvent.content ?? "An unknown error occurred",
                   isError: true,
                 },
               ]);
